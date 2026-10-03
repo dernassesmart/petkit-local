@@ -22,10 +22,19 @@ predicates the rest of the code actually reads.
 #: The panel shows it because there is otherwise no way — for an owner or for
 #: us — to tell which build is running: a stale entity set looks exactly like an
 #: update that did not take.
-VERSION = "2.1.2"
+VERSION = "2.1.3"
 
 DEVICE_TYPES_LITTER = {"t3", "t4", "t5", "t6", "t7"}
 DEVICE_TYPES_FEEDER = {"feeder", "feedermini", "d3", "d4", "d4s", "d4h", "d4sh"}
+
+# The Wi-Fi models that are NOT embedded Linux: ESP32 boards running PetKit's
+# older firmware (going by the D4, Feeder Mini and T4 images). They differ in
+# how they talk to us — plain HTTP on 80 plus HTTPS on the MQTT port, and MQTT
+# credentials read from a FLAT `dev_iot_device_info` block (T3 capture,
+# upstream issue #35). Kept apart from DEVICE_TYPES_NEXT_GEN's complement on
+# purpose: that complement also holds the Bluetooth-only accessories, which
+# have no network to speak any of this on.
+DEVICE_TYPES_ESP32 = {"t3", "t4", "d3", "d4", "d4s", "feeder", "feedermini"}
 
 # Feeders with two hoppers, which dispense from each one separately.
 #

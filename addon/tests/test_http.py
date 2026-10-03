@@ -422,21 +422,29 @@ async def test_heartbeat_still_delivers_commands_while_clearing_the_flag():
         await client.close()
 
 
-async def test_all_iot_device_info_endpoints_return_ali_wrapped():
-    """The cloud returns ``{result: {ali: {...}}}`` for every device, including
-    those calling ``dev_iot_device_info`` (confirmed on a D4SH capture). The
-    previous flat format was an assumption from localkit that no capture
-    supported."""
+async def test_iot_device_info_shape_follows_the_device_family():
+    """The shape is the family's, whichever of the endpoints is called.
+
+    A Linux model reads ``{result: {ali: {...}}}`` (D4SH capture). An ESP32
+    model reads the fields at ``result`` level: a Pura X's capture of the real
+    cloud (upstream issue #35) has them flat, and served the wrapped block it
+    re-signed up every minute, never having found its credentials. See
+    ``test_iot_device_info_shape.py`` for the per-model matrix."""
     reg = DeviceRegistry()
     client = await _client(reg)
     try:
-        await client.post("/6/t4/dev_signup", headers=HDR)
+        await client.post("/6/t5/dev_signup", headers=HDR)
+        for ep in ("dev_iot_device_info", "dev_only_iot_device_info_v2"):
+            r = await client.post(f"/6/t5/{ep}", headers=HDR)
+            res = (await r.json())["result"]
+            assert "ali" in res, f"{ep} should return ali-wrapped for a T5"
+            ali = res["ali"]
+            assert ali["productKey"] and ali["deviceSecret"] and ali["mqttHost"]
         for ep in ("dev_iot_device_info", "dev_only_iot_device_info_v2"):
             r = await client.post(f"/6/t4/{ep}", headers=HDR)
             res = (await r.json())["result"]
-            assert "ali" in res, f"{ep} should return ali-wrapped"
-            ali = res["ali"]
-            assert ali["productKey"] and ali["deviceSecret"] and ali["mqttHost"]
+            assert "ali" not in res, f"{ep} should return the flat block for a T4"
+            assert res["productKey"] and res["deviceSecret"] and res["mqttHost"]
     finally:
         await client.close()
 

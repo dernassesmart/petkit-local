@@ -17,6 +17,7 @@ from petkit_local.devices.base import Device
 from petkit_local.http.handlers._common import (
     device_id, device_serial, no_device_response, request_device,
 )
+from petkit_local.utils.const import DEVICE_TYPES_ESP32
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +83,17 @@ async def handle_iot_device_info(request: web.Request) -> web.Response:
     if not device:
         return no_device_response()
     mqtt_host = device.resolve_mqtt_host(self_mqtt_host(request.app["config"]))
+    # The shape follows the device FAMILY, not the endpoint. An ESP32 model
+    # reads its credentials from a flat block — a Pura X's capture of the real
+    # cloud (upstream issue #35) has them at `result` level, and served the
+    # wrapped block it re-signed up every minute, never having found them.
+    # The Linux models read `result.ali` (D4SH capture) and keep it.
+    dtype = str(request.get("device_type") or device.device_type or "").lower()
+    if dtype in DEVICE_TYPES_ESP32:
+        log.info("IoT device info (flat, ESP32 %s): id=%d -> pk=%s dn=%s mqttHost=%s",
+                 dtype, device.petkit_id, device.mqtt_product_key,
+                 device.mqtt_device_name, mqtt_host)
+        return web.json_response(payloads.to_iot_device_info_flat(device, mqtt_host))
     log.info("IoT device info: id=%d -> pk=%s dn=%s mqttHost=%s",
              device.petkit_id, device.mqtt_product_key, device.mqtt_device_name, mqtt_host)
     return web.json_response(payloads.to_iot_device_info(device, mqtt_host))

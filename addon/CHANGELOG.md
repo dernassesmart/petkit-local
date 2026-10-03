@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.1.3 — 2026-10-03
+
+### ESP32 devices reach the heartbeat: HTTPS and MQTT share port 443
+
+A Feeder D4, provisioned over Bluetooth and registered here, went silent
+within a minute and was shown unavailable; a feed queued for it was never
+collected. The add-on log held the clue, in the same words a Pura X owner had
+decoded in upstream issue #35: `amqtt … No data from client … No more data`.
+The ESP32 models send part of their API traffic as HTTPS to the port their
+MQTT session dials, and with the broker alone on that port a `POST` reached an
+MQTT parser, was dropped, and the device never got as far as polling.
+
+Port 443 is now a small TLS front in the add-on itself (`http/tls_mux.py`). It
+terminates TLS with the add-on's certificate, looks at the first byte, and
+hands an MQTT CONNECT to the broker's plain listener and anything else to the
+HTTP API. The broker is unchanged otherwise, and a device that rejects the
+self-signed certificate for MQTT, as the ESP32 models do, still has the
+heartbeat, which is the command channel that needs no broker. Requests that
+arrive this way show up from loopback, so the handlers that note a device's IP
+no longer record 127.0.0.1 as its address.
+
+### ESP32 devices get their MQTT credentials in the shape they read
+
+`dev_iot_device_info` answered every model with the `ali`-wrapped block, on the
+strength of a D4SH capture. The ESP32 models read a flat one: the same Pura X
+capture of the real cloud has the fields at `result` level, and served the
+wrapped block that device re-signed up every minute, never having found its
+credentials. The shape now follows the device family (`DEVICE_TYPES_ESP32`:
+T3, T4, D3, D4, D4S, Feeder, Feeder Mini); the Linux models keep the wrapped
+block, as before.
+
 ## 2.1.2 — 2026-10-03
 
 Same code as 2.1.1. The image is now built by this fork's own GitHub workflow

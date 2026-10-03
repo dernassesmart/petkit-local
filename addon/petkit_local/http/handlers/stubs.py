@@ -211,7 +211,11 @@ async def handle_event_report(request: web.Request) -> web.Response:
 
     if apply_state_snapshot(device, state):
         registry.mark_dirty()
-        if not device.state.get("ip") and request.remote:
+        # Not when the request came through the TLS multiplexer on the MQTT
+        # port (`http/tls_mux.py`), which hands it over from loopback: that
+        # would record 127.0.0.1 as the device's address for good.
+        if (not device.state.get("ip") and request.remote
+                and request.remote not in ("127.0.0.1", "::1")):
             device.state["ip"] = request.remote
 
     # Applied AFTER the state block, so a derived timestamp is not overwritten

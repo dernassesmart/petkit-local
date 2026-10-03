@@ -20,6 +20,7 @@ from aiohttp import web
 from petkit_local.events.ingest import _MODULE_TYPE_TO_CATEGORY, backfill_event_rows
 from petkit_local.http.bucket import create_bucket_app
 from petkit_local.http.handlers.upload_file_info import wait_for_pending as wait_for_media_tasks
+from petkit_local.http.tls_mux import serve_tls_mux
 from petkit_local.media.retention import RetentionSweeper
 from petkit_local.media.stitch import EpisodeStitcher
 from petkit_local.mqtt.broker import ensure_self_signed, start_broker
@@ -244,13 +245,27 @@ async def start_background(services: Services, app_instance: web.Application) ->
     _spawn(app_instance, "episode-stitcher", stitcher.run())
 
     if not services.no_mqtt:
+        tls_key = config.mqtt_key or f"{config.data_dir}/certs/broker.key"
+        # The TLS port is served by the multiplexer below rather than by
+        # amqtt: the ESP32 models send HTTPS API calls to the same port their
+        # MQTT session dials (`http/tls_mux.py`), and a broker alone there
+        # turns every such call into "No data from client" and a device that
+        # never polls. amqtt keeps the plain listener the mux forwards to.
+        # Without a certificate there is nothing to terminate TLS with, and
+        # the broker is started as it always was so the warning it logs for
+        # that case still appears.
+        mux = config.mqtt_tls and os.path.exists(cert_path) and os.path.exists(tls_key)
         broker = await start_broker(
             config.mqtt_port, registry,
-            tls=config.mqtt_tls, tls_port=config.mqtt_tls_port,
+            tls=config.mqtt_tls and not mux, tls_port=config.mqtt_tls_port,
             certfile=cert_path,
-            keyfile=config.mqtt_key or f"{config.data_dir}/certs/broker.key",
+            keyfile=tls_key,
             strict_auth=config.mqtt_strict_auth, hub=hub,
         )
+        if mux:
+            _spawn(app_instance, "tls-mux",
+                   serve_tls_mux(config.mqtt_tls_port, cert_path, tls_key,
+                                 config.http_port, config.mqtt_port))
         app_instance["mqtt_broker"] = broker
         # The panel is a separate application, and its device view reports
         # what the broker will actually deliver (`broker.delivery_view`) —

@@ -56,7 +56,7 @@ effect immediately, and persist to `/data/settings_overrides.json`.
 | Container port | Default host port | Purpose |
 |------|------|---------|
 | `80` | `80` | Device HTTP API. ESP32 models want it here: a T4 provisioned with `:8080` reaches Wi-Fi and then fails to connect to the server, and one redirected by DNS dials 80 with nowhere to tell it otherwise. |
-| `443` | `443` | Device MQTT over TLS. |
+| `443` | `443` | Device MQTT over TLS, and the HTTPS API calls the ESP32 models (T3, T4, D4) make to the same port. One listener tells the two apart by the first byte. |
 | `1883` | *(unmapped)* | Plain MQTT listener, internal to this app. Map it only if a device connects in plaintext. |
 | `9000` | `9000` | Media upload bucket the device PUTs photos and videos to. |
 | `8099` | *(unmapped)* | The web panel over plain HTTP, **no authentication**. Ingress proxies this internally. |
