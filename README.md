@@ -85,7 +85,10 @@ occasional entity to sit at "unknown".
 https://github.com/dernassesmart/petkit-local
 ```
 
-Install **PetKit Local**, then open its **Configuration** tab before starting it:
+Install **PetKit Local**, then open its **Configuration** tab before starting it. If you also have
+upstream's repository added, the store shows two apps of that name; this one lists
+`dernassesmart` as the repository's maintainer. Keep only one installed — both want ports 80
+and 443.
 
 - **With the Mosquitto app** there is nothing to fill in — the Supervisor hands over the broker and
   its credentials.
