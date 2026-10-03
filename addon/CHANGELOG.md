@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.6 — 2026-10-03
+
+No code change. The app is called **PetKit Local** again — the "(Fork)" suffix
+existed only to tell two store entries apart while this repository still
+carried upstream's metadata — and it has an icon and a logo. The README now
+describes this build: what it is confirmed on, the three DNS records the ESP32
+models need, and why a managed Windows PC cannot provision over Bluetooth.
+
 ## 2.1.5 — 2026-10-03
 
 ### A stop fits the Supervisor's ten seconds
