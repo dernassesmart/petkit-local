@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.1.1 — 2026-10-03
+
+Fork release: this version is built on the Home Assistant host from this
+repository rather than pulled from upstream's registry, which is why the
+`image:` line is gone from `config.yaml`.
+
+### Provisioning an ESP32 device no longer ends on a refused subscription
+
+Before any byte goes to a BLUFI device, the Provision tab subscribes to its
+notifications, which is a write to the descriptor under `0xFF02`. A Feeder D4
+answered that write with a refusal, which Chrome on Windows reports as
+`NotSupportedError: GATT operation not permitted`, and the tab stopped there:
+nothing had been sent, and the log said nothing about which operation had been
+refused.
+
+The subscription is now retried once, and when it is still refused the tab
+says so, sends the identity request and the credentials anyway, and watches
+for the device to call in over HTTP as it already did. A write the device also
+refuses is still an error, but it now lands directly under the line naming
+the key that was being sent. The properties both characteristics advertise are
+logged first, so a refusal can be read against what the device claimed to
+accept.
+
 ## 2.1.0 — 2026-08-12
 
 The YumShare Dual-Hopper (D4SH) camera feeder is now confirmed working, and most

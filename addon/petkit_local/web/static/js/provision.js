@@ -264,16 +264,53 @@ function blufiExplain(view, ctx) {
   return 'ignored ESP32 packet type ' + pktType + ' subtype 0x' + subtype.toString(16);
 }
 
+// The properties a characteristic advertises, for the log. When the device
+// refuses a GATT operation, what it said it would accept is the first thing
+// worth knowing, and the Web Bluetooth error alone does not say.
+function gattProps(c) {
+  const p = c.properties || {};
+  const names = ['read', 'write', 'writeWithoutResponse', 'notify', 'indicate'];
+  return names.filter(k => p[k]).join('+') || 'none';
+}
+
+// Subscribe to 0xFF02, retrying once. Subscribing is a write to the CCCD
+// under the characteristic, and Chrome on Windows reports an ATT "write not
+// permitted" or an OS "access denied" from that write as NotSupportedError
+// "GATT operation not permitted". Seen on a Feeder D4, where it ended the
+// attempt before a single byte had gone to the device. The first try right
+// after connecting can be the transient kind, hence one retry; a second
+// refusal is reported and the caller carries on without replies.
+async function blufiListen(e2p, ctx, sleep) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await e2p.startNotifications();
+      e2p.addEventListener('characteristicvaluechanged', ev => {
+        const text = blufiExplain(ev.target.value, ctx);
+        plog('device: ' + text);
+      });
+      return true;
+    } catch (e) {
+      plog(
+        'subscribing to 0xFF02 failed: ' +
+          e.name +
+          ': ' +
+          e.message +
+          (attempt === 1 ? ' — retrying once…' : ''),
+      );
+      if (attempt === 1) await sleep(1000);
+    }
+  }
+  return false;
+}
+
 async function provisionBlufi(service, cfg) {
   const p2e = await service.getCharacteristic(BLUFI_P2E);
   const e2p = await service.getCharacteristic(BLUFI_E2P);
+  plog('0xFF01 ' + gattProps(p2e) + ', 0xFF02 ' + gattProps(e2p));
 
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ctx = { frag: [], replies: {} };
-  await e2p.startNotifications();
-  e2p.addEventListener('characteristicvaluechanged', ev => {
-    const text = blufiExplain(ev.target.value, ctx);
-    plog('device: ' + text);
-  });
+  const listening = await blufiListen(e2p, ctx, sleep);
 
   const write = p2e.writeValueWithResponse
     ? p2e.writeValueWithResponse.bind(p2e)
@@ -281,7 +318,6 @@ async function provisionBlufi(service, cfg) {
   const ctr = { seq: 0 };
   const enc = new TextEncoder();
 
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const send = async obj => {
     const custom = JSON.stringify(obj);
     plog('ESP32: key ' + obj.key + ' custom data (' + enc.encode(custom).length + ' bytes)');
@@ -297,7 +333,27 @@ async function provisionBlufi(service, cfg) {
     const end = Date.now() + ms;
     return () => live && Date.now() < end;
   };
-
+  if (!listening) {
+    // Nothing the device says can be read, but the writes may still land, and
+    // a device that has its credentials joins Wi-Fi and calls this add-on,
+    // which the caller watches for over HTTP. So send what a provisioning
+    // needs and let that decide, rather than declare the device
+    // unprovisionable over a descriptor write. Each write is still
+    // acknowledged at the ATT level, so one the device refuses surfaces as
+    // the error it is, right after the line naming the key being sent.
+    plog(
+      'no notifications from the device, so its replies cannot be read. ' +
+        'Sending the credentials blind and watching for the device to call in. ' +
+        'If it never does: put the device in Wi-Fi setup mode first (hold its ' +
+        'Wi-Fi button about 5 s until the light flashes fast), remove it from ' +
+        'Windows\u2019 Bluetooth devices if it is listed there, and provision again.',
+    );
+    await send({ key: 110 });
+    await sleep(1500);
+    await send({ key: 151, payload: cfg.payload });
+    await sleep(3000);
+    return false;
+  }
   plog('asking the device who it is (key 110)…');
   await send({ key: 110 });
   await sleep(2000);
