@@ -15,7 +15,7 @@ from aiohttp import web
 from petkit_local.config import show_in_sidebar_once
 from petkit_local.http.proxy import close_proxy_session
 from petkit_local.main.cli import build_config, parse_args
-from petkit_local.main.lifecycle import cleanup_background, start_background
+from petkit_local.main.lifecycle import SHUTDOWN_DRAIN, cleanup_background, start_background
 from petkit_local.main.wiring import build_services
 
 # Every other module logs under `__name__`; this one is also an entry point, and
@@ -64,4 +64,8 @@ def main() -> None:
              "(disabled)" if args.no_ha else "")
     log.info("Registered devices: %d", len(services.registry.all()))
 
-    web.run_app(app, host="0.0.0.0", port=config.http_port, print=None)
+    # `shutdown_timeout`: see lifecycle.SHUTDOWN_DRAIN — the device-facing
+    # app is drained before `cleanup_background` even runs, so an open
+    # device connection here would spend the Supervisor's whole budget.
+    web.run_app(app, host="0.0.0.0", port=config.http_port, print=None,
+                shutdown_timeout=SHUTDOWN_DRAIN)

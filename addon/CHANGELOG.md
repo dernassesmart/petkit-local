@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.5 — 2026-10-03
+
+### A stop fits the Supervisor's ten seconds
+
+2.1.4 blamed the TLS front for the exit 137 on every restart, and was wrong
+about where the time went: the app's own log shows the broker closed within
+40 ms of SIGTERM and then nothing for ten seconds. What follows the broker in
+the shutdown order are the panel's and the bucket's aiohttp runners, and
+aiohttp waits up to 60 s for each one's open connections. A browser tab left
+on the panel is one such connection. Every runner, the device-facing one
+included, now drains for at most two seconds.
+
 ## 2.1.4 — 2026-10-03
 
 ### Restarts no longer end in a kill

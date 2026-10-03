@@ -37,6 +37,11 @@ log = logging.getLogger(__name__)
 #: hand-maintained tuple of names, which had already drifted out of date.
 BACKGROUND_TASKS = "background_tasks"
 
+#: How long each aiohttp runner may wait for open connections at shutdown.
+#: The Supervisor sends SIGTERM and kills the container 10 s later, and
+#: there are three runners plus the broker to stop inside that budget.
+SHUTDOWN_DRAIN = 2.0
+
 
 def _spawn(app_instance: web.Application, name: str,
            coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
@@ -151,7 +156,11 @@ async def start_background(services: Services, app_instance: web.Application) ->
     # BEFORE `runner.setup()`, which freezes the Application and makes a new
     # key a DeprecationWarning today and an error under aiohttp 4.
     panel["go2rtc"] = go2rtc
-    runner = web.AppRunner(panel)
+    # Bounded drains everywhere a runner is built: aiohttp otherwise waits
+    # up to 60 s for every open connection, and the Supervisor kills the
+    # container 10 s after SIGTERM. A browser tab left on the panel was
+    # enough to turn every restart into an exit 137.
+    runner = web.AppRunner(panel, shutdown_timeout=SHUTDOWN_DRAIN)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", config.web_port).start()
     app_instance["panel_runner"] = runner
@@ -181,7 +190,7 @@ async def start_background(services: Services, app_instance: web.Application) ->
     app_config["device_log_root"] = device_log_root
     bucket_app = create_bucket_app(raw_root, hub=hub, log_root=device_log_root,
                                    registry=registry, data_dir=config.data_dir)
-    bucket_runner = web.AppRunner(bucket_app)
+    bucket_runner = web.AppRunner(bucket_app, shutdown_timeout=SHUTDOWN_DRAIN)
     await bucket_runner.setup()
     # Bucket needs TLS: cloud parses the PAR URL as https:// and crashes
     # on http://. Reuse the same self-signed cert as the MQTT TLS listener.
