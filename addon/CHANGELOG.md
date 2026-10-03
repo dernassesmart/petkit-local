@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.2 — 2026-10-03
+
+Same code as 2.1.1. The image is now built by this fork's own GitHub workflow
+and published as `ghcr.io/dernassesmart/petkit-local`, so updates install by
+pulling again instead of building on the Home Assistant host.
+
 ## 2.1.1 — 2026-10-03
 
 Fork release: this version is built on the Home Assistant host from this
