@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.4 — 2026-10-03
+
+### Restarts no longer end in a kill
+
+Every stop of 2.1.3 took the Supervisor's full ten seconds and ended with exit
+code 137. The TLS front on port 443 was the cause, twice over: its shutdown
+waited for `Server.wait_closed()`, which on Python 3.12 waits for every open
+connection to end on its own, and a device's MQTT session or long poll never
+does; and `serve_forever()` does the same wait by itself on cancellation,
+before any cleanup of ours can run. The listener now waits on a plain future,
+closes the piped connections by hand, and gives `wait_closed()` two seconds.
+A test holds a connection open across a shutdown.
+
 ## 2.1.3 — 2026-10-03
 
 ### ESP32 devices reach the heartbeat: HTTPS and MQTT share port 443

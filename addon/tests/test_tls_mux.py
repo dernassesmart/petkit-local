@@ -63,6 +63,47 @@ async def test_first_byte_decides_between_http_and_mqtt(tmp_path):
             await s.wait_closed()
 
 
+async def test_shutdown_does_not_wait_for_a_piped_connection_to_end(tmp_path):
+    """A device's MQTT session or long poll never ends on its own; a restart
+    that waited for it would be killed by the Supervisor after 10 s."""
+    from petkit_local.http.tls_mux import serve_tls_mux
+
+    cert = str(tmp_path / "broker.crt")
+    key = str(tmp_path / "broker.key")
+    assert ensure_self_signed(cert, key)
+
+    async def hold(reader, writer):
+        await reader.read(64)
+        await reader.read()  # never answers; returns only when the mux closes on it
+        writer.close()
+
+    backend = await asyncio.start_server(hold, "127.0.0.1", 0)
+    bport = backend.sockets[0].getsockname()[1]
+    # Find a free port the way the OS does, then hand it to the mux.
+    probe = await asyncio.start_server(lambda r, w: None, "127.0.0.1", 0)
+    port = probe.sockets[0].getsockname()[1]
+    probe.close()
+    await probe.wait_closed()
+
+    task = asyncio.create_task(serve_tls_mux(port, cert, key, bport, bport))
+    await asyncio.sleep(0.3)
+    reader, writer = await asyncio.open_connection("127.0.0.1", port, ssl=_client_ctx())
+    writer.write(b"POST /6/d4/heartbeat HTTP/1.1\r\n\r\n")
+    await writer.drain()
+    await asyncio.sleep(0.3)
+
+    task.cancel()
+    try:
+        await asyncio.wait_for(task, 5.0)
+    except asyncio.CancelledError:
+        pass
+    # The piped connection was closed from the server side.
+    assert await reader.read(16) == b""
+    writer.close()
+    backend.close()
+    await backend.wait_closed()
+
+
 async def test_silent_client_is_dropped_without_touching_either_side(tmp_path, monkeypatch):
     from petkit_local.http import tls_mux
 

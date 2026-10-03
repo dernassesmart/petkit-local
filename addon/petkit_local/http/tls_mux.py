@@ -75,8 +75,25 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> N
             pass
 
 
+#: Every writer currently piped, both the device's and the in-process side's.
+#: Shutdown closes them by hand: `Server.wait_closed()` on Python < 3.13 waits
+#: for every connection to end on its own, and a device's MQTT session or a
+#: long poll never does — the Supervisor would kill the container after 10 s
+#: (exit 137) on each restart.
+_LIVE: set[asyncio.StreamWriter] = set()
+
+
 async def _handle(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
                   http_port: int, mqtt_port: int) -> None:
+    _LIVE.add(client_w)
+    try:
+        await _route(client_r, client_w, http_port, mqtt_port)
+    finally:
+        _LIVE.discard(client_w)
+
+
+async def _route(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
+                 http_port: int, mqtt_port: int) -> None:
     peer = client_w.get_extra_info("peername")
     peer_ip = peer[0] if peer else "?"
     try:
@@ -100,9 +117,13 @@ async def _handle(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter
         client_w.close()
         return
     log.info("TLS mux: %s from %s -> 127.0.0.1:%d", label, peer_ip, target)
-    up_w.write(first)
-    await up_w.drain()
-    await asyncio.gather(_pipe(client_r, up_w), _pipe(up_r, client_w))
+    _LIVE.add(up_w)
+    try:
+        up_w.write(first)
+        await up_w.drain()
+        await asyncio.gather(_pipe(client_r, up_w), _pipe(up_r, client_w))
+    finally:
+        _LIVE.discard(up_w)
 
 
 async def start_tls_mux(port: int, certfile: str, keyfile: str,
@@ -131,7 +152,18 @@ async def serve_tls_mux(port: int, certfile: str, keyfile: str,
     """Run the listener until cancelled — the shape `lifecycle._spawn` wants."""
     server = await start_tls_mux(port, certfile, keyfile, http_port, mqtt_port)
     try:
-        await server.serve_forever()
+        # Not `serve_forever()`: on cancellation that awaits `wait_closed()`
+        # itself, before anything here could run, and on Python < 3.13 that
+        # means waiting for every piped connection to end on its own.
+        await asyncio.Future()
     finally:
         server.close()
-        await server.wait_closed()
+        for w in list(_LIVE):
+            try:
+                w.close()
+            except Exception:  # pragma: no cover - already gone
+                pass
+        try:
+            await asyncio.wait_for(server.wait_closed(), 2.0)
+        except (TimeoutError, asyncio.CancelledError):
+            pass
