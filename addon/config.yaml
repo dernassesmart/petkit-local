@@ -1,4 +1,4 @@
-name: "PetKit Local (Fork)"
+name: "PetKit Local"
 description: "Local cloud replacement for PetKit litter boxes, feeders, fountains and accessories"
 version: "2.1.5"
 slug: "petkitlocal"
@@ -12,7 +12,7 @@ url: "https://github.com/dernassesmart/petkit-local"
 # so **a release is not usable until the matching tag has been published**. The
 # workflow refuses a `v*` git tag whose version disagrees with this file, which
 # is what keeps the two from drifting apart.
-# This fork publishes its own image from the same workflow, so the Supervisor
+# This repository publishes its own image from the same workflow, so the Supervisor
 # pulls it at the version above; 2.1.1 was the one release built on the host.
 image: "ghcr.io/dernassesmart/petkit-local"
 #
