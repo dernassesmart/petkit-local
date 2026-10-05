@@ -380,6 +380,11 @@ class Device:
         self.command_queue.clear()
         return cmds
 
+    @property
+    def last_ip(self) -> str:
+        """The LAN address as it is persisted -- see `to_dict`."""
+        return str(self.state.get("ip") or "")
+
     def to_dict(self) -> dict[str, Any]:
         """The persisted form: identity, MQTT credentials and `config` only.
 
@@ -413,7 +418,7 @@ class Device:
             # Assistant and no talk. `media/go2rtc.py::probe_stream` verifies
             # the address before anything is advertised, so a stale one costs a
             # five-second probe and nothing else.
-            "last_ip": self.state.get("ip", ""),
+            "last_ip": self.last_ip,
         }
 
     @classmethod

@@ -92,7 +92,9 @@ def test_the_value_template_renders_a_clock_and_blanks_an_unknown():
     tmpl = build_discovery_payload(
         idx["flush_time"], 1, "w7h", "Fountain", "SN",
         "petkit-local/1/state")["value_template"]
-    assert "value_json.settings.flushTime" in tmpl
+    # Intermediate keys through `.get(key, {})` since 2.1.11: a device that
+    # never sends `settings` must not make HA log a template error per state.
+    assert "value_json.get('settings', {}).flushTime" in tmpl
     assert "| default(-1) | int(-1)" in tmpl
     assert "'%02d:%02d:%02d' | format" in tmpl
 
