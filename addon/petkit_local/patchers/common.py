@@ -536,7 +536,16 @@ TALK_SINK_SCRIPT = (
     # opens the FIFO leaves `cat > $F` blocked forever, and `nc -e` has replaced
     # the accept loop, so one connection killed the port. The rest of the path is
     # kept as a fallback for models that place the lib elsewhere (T6).
-    "LD_LIBRARY_PATH=/app/bin:/syslib/lib:/app/lib:/system/lib:/usr/lib:/lib "
+    #
+    # /soc/usr/lib, /soc/lib and /alg: the Axera generation (YumShare Dual-Hopper
+    # 2, D4SH3). Its stock init exports exactly
+    # /soc/usr/lib:/soc/lib:/app/bin:/app/lib:/alg, and its pktool links
+    # libssl.so.1.0.0 out of /soc/lib -- with the path above it died at load
+    # ("libssl.so.1.0.0: cannot open shared object file"), seen on fw 895.
+    # Verified there by hand that pktool play_aac on a FIFO plays through media
+    # once it loads; the directories do not exist on the MIPS models, where the
+    # loader just skips them.
+    "LD_LIBRARY_PATH=/app/bin:/soc/usr/lib:/soc/lib:/alg:/syslib/lib:/app/lib:/system/lib:/usr/lib:/lib "
     "/app/bin/pktool play_aac $F &\n"
     "cat > $F\n"
     "rm -f $F\n"

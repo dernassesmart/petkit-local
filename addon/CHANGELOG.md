@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.1.15 — 2026-10-05
+
+### Two-way talk on the YumShare Dual-Hopper 2: the sink can now load pktool
+
+On the Axera generation (D4SH3, firmware 895) the talk sink's `pktool` never
+started: the sink script set a library path written for the MIPS D4SH, and
+this firmware keeps pktool's `libssl.so.1.0.0` in `/soc/lib`. Every talk
+ended with ffmpeg reporting "Connection reset by peer" and nothing from the
+speaker. The sink now also searches `/soc/usr/lib`, `/soc/lib` and `/alg`,
+the directories the device's own init exports. Checked on the device that
+`pktool play_aac` on a named pipe plays through `media` once it loads, with
+a one-second gap before the first byte and a feed slower than real time.
+
+To pick the fix up, remove and re-apply "Two-Way Talk" on the Patchers tab:
+the sink script is written to the device at apply time.
+
 ## 2.1.14 — 2026-10-05
 
 ### The heartbeat tells the add-on where the device is

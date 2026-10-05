@@ -234,6 +234,19 @@ def test_talk_patcher_is_registered():
     assert ALL_PATCHERS["talk"]["files"] == ["pktalk_sink.sh"]
 
 
+def test_the_talk_sink_loads_pktool_on_the_axera_models_too():
+    """The YumShare Dual-Hopper 2 (Axera) keeps pktool's libssl in /soc/lib; the
+    stock init exports /soc/usr/lib:/soc/lib:/app/bin:/app/lib:/alg. Without
+    those the sink's pktool died at load and no talk audio ever played."""
+    from petkit_local.patchers.common import TALK_SINK_SCRIPT
+
+    line = [ln for ln in TALK_SINK_SCRIPT.splitlines() if "pktool play_aac" in ln][0]
+    path = line.split("LD_LIBRARY_PATH=", 1)[1].split()[0].split(":")
+    assert path[0] == "/app/bin", "libbase.so first, as on the MIPS D4SH"
+    for d in ("/soc/usr/lib", "/soc/lib", "/alg"):
+        assert d in path, f"{d} missing: pktool cannot load on the Axera models"
+
+
 def test_talk_sink_file_installed_in_store():
     """The sink script is a real file in the patch store (not a /tmp heredoc), so
     it must resolve to a store path and thus be deleted on removal."""
