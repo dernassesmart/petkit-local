@@ -386,7 +386,7 @@ class Device:
         Live state (`state`, `command_queue`, the liveness timestamps and flags)
         is deliberately excluded — it is re-derived from the device's next
         contact, and persisting it would resurrect a stale "online" after a
-        restart.
+        restart. One exception, `last_ip`, is explained where it is written.
         """
         return {
             "device_type": self.device_type,
@@ -404,6 +404,16 @@ class Device:
             "api_secret": self.api_secret,
             "config": self.config,
             "created_at": self.created_at,
+            # The one piece of live state that does survive, as a HINT rather
+            # than a fact: the LAN address gates the stream probe, the Patchers
+            # tab and two-way talk, and a YumShare Dual-Hopper reports it only
+            # with a full state report, which it sends rarely. After a restart
+            # the add-on used to sit without an IP for as long as that took --
+            # half an hour was observed -- with no stream, no camera in Home
+            # Assistant and no talk. `media/go2rtc.py::probe_stream` verifies
+            # the address before anything is advertised, so a stale one costs a
+            # five-second probe and nothing else.
+            "last_ip": self.state.get("ip", ""),
         }
 
     @classmethod
@@ -431,4 +441,9 @@ class Device:
         d.api_secret = data.get("api_secret", d.api_secret)
         d.config = data.get("config", {})
         d.created_at = data.get("created_at", d.created_at)
+        last_ip = str(data.get("last_ip") or "")
+        # Only a plausible IPv4 literal is seeded (see `to_dict`): the value
+        # came from `request.remote` in some paths and could be anything.
+        if last_ip.count(".") == 3 and all(p.isdigit() and int(p) < 256 for p in last_ip.split(".")):
+            d.state["ip"] = last_ip
         return d

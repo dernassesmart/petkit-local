@@ -70,8 +70,16 @@ API_ADDR = "127.0.0.1:1984"
 #: state, so this is polled rather than subscribed to.
 SUPERVISE_INTERVAL_SECONDS = 30.0
 
-#: How long a probe result is trusted. Long on purpose — see `probe_stream`.
+#: How long a POSITIVE probe result is trusted. Long on purpose — see
+#: `probe_stream`.
 PROBE_TTL_SECONDS = 600.0
+
+#: How long a NEGATIVE one is. A camera that answered "no stream" is usually
+#: one that is rebooting -- every patcher ends in a reboot -- and trusting that
+#: for ten minutes left the stream, the camera in Home Assistant and two-way
+#: talk gone for ten minutes after each patch. One connection attempt a minute
+#: is cheap; being wrong for ten minutes is not.
+PROBE_RETRY_SECONDS = 60.0
 
 #: The first bytes of an FLV file. An open port is NOT evidence of a stream, so
 #: this signature is what the probe actually requires.
@@ -222,9 +230,12 @@ class Go2rtc:
         self._log_path = os.path.join(data_dir, "go2rtc.log")
         self._proc: asyncio.subprocess.Process | None = None
         self._rendered = ""
-        #: petkit_id -> (monotonic deadline, verdict). Probing costs one of the
-        #: device's connections, and tserver only reliably has one.
-        self._probes: dict[int, tuple[float, bool]] = {}
+        #: petkit_id -> (monotonic deadline, verdict, ip probed). Probing costs
+        #: one of the device's connections, and tserver only reliably has one.
+        #: The ip is part of the entry: a verdict about one address says
+        #: nothing about another, and the address seeded from `last_ip` at
+        #: startup may be stale.
+        self._probes: dict[int, tuple[float, bool, str]] = {}
 
     @property
     def running(self) -> bool:
@@ -292,11 +303,12 @@ class Go2rtc:
                 device.state.pop(STREAM_AVAILABLE, None)
                 self._probes.pop(device.petkit_id, None)
                 continue
-            deadline, _ = self._probes.get(device.petkit_id, (0.0, False))
-            if deadline > now:
+            deadline, _, probed_ip = self._probes.get(device.petkit_id, (0.0, False, ""))
+            if deadline > now and probed_ip == ip:
                 continue
             available = await probe_stream(ip)
-            self._probes[device.petkit_id] = (now + PROBE_TTL_SECONDS, available)
+            ttl = PROBE_TTL_SECONDS if available else PROBE_RETRY_SECONDS
+            self._probes[device.petkit_id] = (now + ttl, available, ip)
             if available:
                 device.state[STREAM_AVAILABLE] = True
             else:

@@ -791,6 +791,18 @@ function renderPanelBody(d) {
         )}</h3>
     <p class="sub">Recorded clips and snapshots are in the <a data-action="goto-tab" data-tab="timeline">Timeline</a> and in Home Assistant's media browser.</p>
     ${
+      // Talking needs the device's IP and the Two-Way Talk patcher, NOT the
+      // live stream. The button used to sit inside the RTSP block below and
+      // vanished with it: `streams` is empty until a probe has confirmed the
+      // stream again, which after a restart or a patcher's reboot can take
+      // minutes, and the button was gone for exactly that long.
+      d.is_camera
+        ? `<div style="display:flex;gap:8px;margin:6px 0 10px;align-items:center;flex-wrap:wrap"><button class="act" data-action="talk-ptt" data-id="${esc(String(d.id))}"${d.state && d.state.ip ? '' : ' disabled'} title="Click to talk through the device speaker, click again to stop">🎙 Talk</button><span class="mut" id="talk-status-${esc(String(d.id))}">${d.state && d.state.ip ? '' : 'waiting for the device to report its address'}</span>${help(
+            'Click to start talking, click again to stop; a talk ends by itself after 20 seconds, when this tab is hidden, or on Escape. Needs the Two-Way Talk patcher on the Patchers tab and microphone permission in the browser (asked on the first click). Half-duplex: the camera audio a Home Assistant card may be playing is not muted here, so expect an echo if both run on the same machine.',
+          )}</div>`
+        : ''
+    }
+    ${
       // The stream addresses live HERE and not on the Patchers tab: that card is
       // about applying and undoing a change to the firmware, and once it is
       // applied the address is just another fact about the device.
@@ -799,9 +811,6 @@ function renderPanelBody(d) {
             'Add it as a Generic Camera. Do NOT use the device’s own address below for that: Home Assistant opens a stream with PyAV, and the device’s FLV segfaults libav and restarts the whole of HA. go2rtc stands between the two.',
           )}</label>
       <div style="display:flex;gap:6px;margin-top:4px;align-items:center"><code style="flex:1;overflow-x:auto">${esc(d.streams.rtsp)}</code><button class="mini" data-action="copy-url" data-url="${esc(d.streams.rtsp)}">Copy</button></div>
-      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="act" data-action="talk-ptt" data-id="${esc(String(d.id))}" title="Click to talk through the device speaker, click again to stop">🎙 Talk</button><span class="mut" id="talk-status-${esc(String(d.id))}"></span>${help(
-        'Click to start talking, click again to stop; a talk ends by itself after 20 seconds, when this tab is hidden, or on Escape. Needs the Two-Way Talk patcher on the Patchers tab and microphone permission in the browser (asked on the first click). Half-duplex: the camera audio a Home Assistant card may be playing is not muted here, so expect an echo if both run on the same machine.',
-      )}</div>
       <details class="adv" style="margin-top:6px"><summary>Straight from the device (VLC, ffmpeg — not Home Assistant)</summary>
         ${Object.entries(d.streams)
           .filter(([k]) => k !== 'rtsp')
@@ -810,7 +819,7 @@ function renderPanelBody(d) {
               `<div style="display:flex;gap:6px;margin-top:4px;align-items:center"><span class="mut" style="min-width:56px">${esc(k)}</span><code style="flex:1;overflow-x:auto">${esc(url)}</code><button class="mini" data-action="copy-url" data-url="${esc(url)}">Copy</button></div>`,
           )
           .join('')}</details></div>`
-        : `<p class="sub mut">No live stream. The device is only checked for one every few minutes, and it answers with a stream once <b>Local Camera Streaming</b> is applied on the <a data-action="goto-tab" data-tab="patchers">Patchers</a> tab${d.state && d.state.ip ? '' : ' — and it has not reported an IP yet either'}.</p>`
+        : `<p class="sub mut">No live stream. The device is only checked for one every few minutes, and it answers with a stream once <b>Local Camera Streaming</b> is applied on the <a data-action="goto-tab" data-tab="patchers">Patchers</a> tab.</p>`
     }
     <table class="stbl"><tbody>${
       // The camera/image entities themselves are deliberately NOT listed with a

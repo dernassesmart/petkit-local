@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.1.13 — 2026-10-05
+
+### The camera comes back within seconds of a restart, not whenever
+
+After every restart of the add-on a YumShare Dual-Hopper lost its live stream,
+its camera in Home Assistant ("Connection refused" from the stream worker) and
+two-way talk, for as long as it took the device to send its next full state
+report. Half an hour was observed. Live state is deliberately not persisted,
+and that included the device's LAN address; without an address the stream
+probe never runs, go2rtc never starts, and nothing is advertised. The address
+now survives as a hint, `last_ip`, and the first supervisor pass after startup
+probes it at once. A stale address costs one five-second probe: the verdict is
+cached per address, so a device that reports a new one is probed again right
+away rather than after the old verdict's ten minutes.
+
+A failed probe is also retried after one minute instead of ten. Every patcher
+ends in a device reboot, and the probe that ran into that reboot used to take
+the stream away for ten minutes afterwards.
+
+### The talk button no longer disappears with the stream
+
+It was rendered inside the live-stream block, so it vanished whenever the
+stream address was gone, which after a restart or a patcher was exactly when
+somebody looked for it. It is now rendered for every camera model, disabled
+with a note until the device has reported its address, and the page's
+periodic repaint no longer detaches it mid-talk: the button and its status
+line are looked up by id each time they are written. A second click while the
+first is still waiting for the microphone prompt no longer starts a second
+session.
+
+### The talk server says what went wrong
+
+ffmpeg's stderr is logged, an ffmpeg that exits under a live session is
+reported to the browser as an error with its last line, and a sink that
+accepts the connection but never reads ends the session after five seconds
+instead of looking like success.
+
 ## 2.1.12 — 2026-10-05
 
 ### Talk is a click, not a hold

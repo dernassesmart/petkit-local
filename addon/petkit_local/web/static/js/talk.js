@@ -22,15 +22,35 @@ import { onAction } from './delegate.js';
 const TALK_MAX_SECONDS = 20;
 
 let session = null; // the one talk in progress, if any
+// Device id whose start() is still in flight (patcher check, microphone
+// prompt): `session` is null until then, and a repaint in that window draws
+// a fresh enabled button, so without this a second click starts a second
+// microphone and a second WebSocket.
+let starting = null;
+
+const IDLE_LABEL = '🎙 Talk';
+
+// The device page is repainted every few seconds through innerHTML, which
+// replaces the button the talk was started on. So nothing here holds a node:
+// the button and the status line are looked up by id each time they are
+// touched, and a repaint mid-talk shows the live state again on the next tick.
+function button(id) {
+  return document.querySelector('[data-action="talk-ptt"][data-id="' + id + '"]');
+}
 
 function status(id, text) {
   const el = document.getElementById('talk-status-' + id);
   if (el) el.textContent = text;
 }
 
-async function start(id, btn) {
-  if (session) return;
-  btn.disabled = true;
+function label(id, text) {
+  const el = button(id);
+  if (el) el.textContent = text;
+}
+
+async function start(id) {
+  if (session || starting !== null) return;
+  starting = id;
   status(id, 'checking…');
   try {
     // Without the patcher's sink the server connects to nothing and drops
@@ -66,18 +86,9 @@ async function start(id, btn) {
       : 'audio/webm';
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(proto + '//' + location.host + BASE + 'api/devices/' + id + '/talk');
-    const s = {
-      id,
-      ws,
-      stream,
-      rec: null,
-      btn,
-      label: btn.textContent,
-      left: TALK_MAX_SECONDS,
-      timer: null,
-    };
+    const s = { id, ws, stream, rec: null, left: TALK_MAX_SECONDS, timer: null };
     session = s;
-    btn.textContent = '● connecting…';
+    label(id, '● connecting…');
     status(id, '');
     ws.onopen = () => {
       if (session !== s) return;
@@ -93,7 +104,8 @@ async function start(id, btn) {
       s.rec.start(250);
       const tick = () => {
         if (session !== s) return;
-        btn.textContent = '■ Stop talking (' + s.left + ' s)';
+        label(id, '■ Stop talking (' + s.left + ' s)');
+        status(id, 'talking — the device plays what the microphone hears');
         if (s.left <= 0) {
           stop();
           return;
@@ -125,7 +137,7 @@ async function start(id, btn) {
       if (session === s) stop();
     };
   } finally {
-    btn.disabled = false;
+    starting = null;
   }
 }
 
@@ -151,7 +163,7 @@ function stop() {
   } catch (e) {
     /* socket already gone */
   }
-  s.btn.textContent = s.label;
+  label(s.id, IDLE_LABEL);
 }
 
 onAction('talk-ptt', btn => {
@@ -159,7 +171,8 @@ onAction('talk-ptt', btn => {
     stop();
     return;
   }
-  start(Number(btn.dataset.id), btn);
+  if (starting !== null) return;
+  start(Number(btn.dataset.id));
 });
 
 // A talk must not outlive the page it was started from.
