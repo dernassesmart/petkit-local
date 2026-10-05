@@ -7,8 +7,9 @@ import { onAction } from './delegate.js';
 // decided by asking it, not by a model table: connect, then look for whichever
 // GATT service it exposes. A table would need updating for every codename and
 // would be wrong the first time a model shipped a different board.
-// 1. PetKit Ingenic devices (T5/T6/T7/D4H/D4SH/W7H): framed JSON written to
-//    0xAAA2, answered on 0xAAA1.
+// 1. PetKit Ingenic/Axera devices (T5/T6/T7/D4H/D4SH/W7H): JSON written to
+//    0xAAA2, answered framed on 0xAAA1. Whether the write is framed or bare
+//    depends on the model and is probed (see `provisionPetkit`).
 // 2. PetKit ESP32 devices (T4, D4): PetKit JSON carried as custom
 //    data on service 0xFFFF, write 0xFF01, notify 0xFF02.
 //
@@ -594,30 +595,54 @@ async function provisionPetkit(service, cfg) {
   });
   await tx.startNotifications();
 
-  const write = async frame => {
-    if (rx.writeValueWithResponse) {
-      await rx.writeValueWithResponse(frame);
-    } else {
-      await rx.writeValue(frame);
-    }
-  };
-  let seq = 0;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const enc = new TextEncoder();
+  const withResp = frame =>
+    rx.writeValueWithResponse ? rx.writeValueWithResponse(frame) : rx.writeValue(frame);
+  const woResp = frame => rx.writeValueWithoutResponse(frame);
+  let seq = 0;
 
-  const send = async obj => {
-    await write(pkFrame(seq++, obj));
-  };
-
+  // Which way a device wants to be written to is asked, not assumed. The
+  // firmware families differ and each ignores the other's dialect in silence:
+  // a Purobot Ultra and a first-generation YumShare Dual-Hopper take the framed
+  // envelope (with response), a YumShare Solo takes bare JSON with response and
+  // drops a framed write without a word (1.6.1, verified on a D4H fw 867), and
+  // the T6 report wrote its frames without response. 1.7.0 reduced this to the
+  // framed dialect alone, and a YumShare Dual-Hopper 2 (`Petkit_A_D4SH3`) then
+  // acknowledged every write at the ATT level and never answered one. Probed
+  // in the order the models were confirmed, so nothing already working waits.
+  // A device may also drop the first write after a connect, hence two tries
+  // per dialect.
+  const dialects = [
+    { name: 'framed, with response', write: obj => withResp(pkFrame(seq++, obj)) },
+    { name: 'bare JSON, with response', write: obj => withResp(enc.encode(JSON.stringify(obj))) },
+    { name: 'framed, without response', write: obj => woResp(pkFrame(seq++, obj)) },
+  ];
+  let send = null;
   plog('asking the device who it is (key 110)…');
-  await send({ key: 110 });
-  for (let i = 0; i < 20 && !replies[110]; i++) await sleep(250);
-  if (!replies[110]) {
-    plog('no identity reply yet — retrying key 110 once…');
-    await send({ key: 110 });
-    for (let i = 0; i < 20 && !replies[110]; i++) await sleep(250);
+  for (const d of dialects) {
+    if (d === dialects[2] && !(rx.properties && rx.properties.writeWithoutResponse)) continue;
+    for (let attempt = 1; attempt <= 2 && !replies[110]; attempt++) {
+      try {
+        await d.write({ key: 110 });
+      } catch (e) {
+        plog(d.name + ': write failed (' + e.name + ': ' + e.message + ')');
+        break;
+      }
+      for (let i = 0; i < 20 && !replies[110]; i++) await sleep(250);
+      if (!replies[110] && attempt === 1) {
+        plog(d.name + ': no reply — once more, a device may drop the first write after a connect…');
+      }
+    }
+    if (replies[110]) {
+      send = d.write;
+      plog('dialect: ' + d.name);
+      break;
+    }
+    plog(d.name + ': no reply, trying the next dialect…');
   }
-  if (!replies[110]) {
-    plog('the device never answered — make sure it is still in pairing mode.');
+  if (!send) {
+    plog('the device answered in no dialect — make sure it is still in pairing mode.');
     return false;
   }
   // Inter-step delays transcribed from captures of the official app, each

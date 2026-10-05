@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.7 — 2026-10-05
+
+### The Provision tab asks a device which dialect it speaks, again
+
+A YumShare Dual-Hopper 2 (`Petkit_A_D4SH3`) exposed PetKit's provisioning
+service, acknowledged every write at the Bluetooth level, and never answered
+one. 1.6.1 had met this before on a YumShare Solo, which takes bare JSON with
+response and ignores the framed envelope in silence, and probed both dialects;
+1.7.0 reduced the path to the framed envelope alone, which is what the Purobot
+Ultra and the first-generation Dual-Hopper take.
+
+The probe is back, in the order the models were confirmed: framed with
+response, bare JSON with response, framed without response. Each dialect gets
+two tries, because a device may drop the first write after a connect, and the
+log names the one the device answered in. Nothing already working waits: the
+first dialect is the one 2.1.6 used.
+
 ## 2.1.6 — 2026-10-03
 
 No code change. The app is called **PetKit Local** again — the "(Fork)" suffix
