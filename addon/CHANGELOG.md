@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.8 — 2026-10-05
+
+### A reply the Provision tab does not understand is shown, not dropped
+
+The PetKit path parsed every notification and silently discarded one that was
+neither a framed nor a bare PetKit document, so a device answering in a shape
+this does not know looked exactly like a device that never answers. The bytes
+are now logged, as hex and as text. A YumShare Dual-Hopper 2 that answered no
+dialect in 2.1.7 raised the question; this is what tells the two cases apart.
+The first write also waits 400 ms after the subscription, so a reply that
+arrives before it has settled is not lost.
+
 ## 2.1.7 — 2026-10-05
 
 ### The Provision tab asks a device which dialect it speaks, again

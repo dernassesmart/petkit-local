@@ -589,11 +589,26 @@ async function provisionPetkit(service, cfg) {
   const replies = {}; // key -> payload, as frames land
   tx.addEventListener('characteristicvaluechanged', ev => {
     const msg = pkParse(ev.target.value);
-    if (!msg) return;
+    if (!msg) {
+      // Not a PetKit document in either framing. Shown rather than dropped: a
+      // device that answers in a shape this does not know is a different
+      // problem from one that never answers, and the bytes are the only way
+      // to tell the two apart (a YumShare Dual-Hopper 2 raised the question).
+      const b = pkBytes(ev.target.value);
+      const hex = Array.from(b, x => x.toString(16).padStart(2, '0')).join(' ');
+      const text = new TextDecoder().decode(b).replace(/[^\x20-\x7e]/g, '.');
+      plog(
+        'device sent ' + b.length + ' bytes this does not understand: ' + hex + '  "' + text + '"',
+      );
+      return;
+    }
     replies[msg.key] = msg.payload || {};
     plog('device: key ' + msg.key + ' ' + JSON.stringify(msg.payload || {}));
   });
   await tx.startNotifications();
+  // A moment between the subscription and the first write: a device that sends
+  // its reply before the subscription has settled loses it, and nothing says so.
+  await new Promise(r => setTimeout(r, 400));
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const enc = new TextEncoder();
