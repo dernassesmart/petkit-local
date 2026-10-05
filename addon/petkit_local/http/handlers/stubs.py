@@ -25,6 +25,7 @@ from aiohttp import web
 
 from petkit_local.devices import payloads
 from petkit_local.devices.base import Device
+from petkit_local.events.normalize import event_name_for
 from petkit_local.events.ingest import (
     apply_derived_state, apply_state_snapshot, entity_for_event, from_event_report,
     parse_event_report_form,
@@ -234,8 +235,9 @@ async def handle_event_report(request: web.Request) -> web.Response:
         # Resolved through the code table, not by name: over HTTP `event_type`
         # is a numeric code whose meaning depends on the device category.
         entity_suffix = entity_for_event(row["event_type"], device.device_type)
-        if entity_suffix:
-            await ha_publisher.publish_event(device, entity_suffix, row["event_type"], content)
+        event_name = event_name_for(row["event_type"], device.device_type)
+        if entity_suffix and event_name:
+            await ha_publisher.publish_event(device, entity_suffix, event_name, content)
         await ha_publisher.publish_state(device)
         await ha_publisher.publish_availability(device)
 

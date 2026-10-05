@@ -384,6 +384,36 @@ def entity_for_event(event_type: str, device_type: str | None = None) -> str | N
     return KIND_TO_ENTITY.get(code.kind) if code else None
 
 
+def event_name_for(event_type: str | None, device_type: str | None = None) -> str | None:
+    """The `event_type` HA is told, for a raw event in either namespace.
+
+    An HA `event` entity accepts only the names in its `event_types` list, and
+    those are the MQTT topic names (`feed_over`, `pet_in`, ...). The HTTP path
+    delivers a numeric code instead, and the published number was rejected
+    by HA in silence while the feeder had just fed. An MQTT name passes
+    through; an HTTP code is matched to the MQTT row that describes the same
+    thing -- by kind and label first (the tables were written together and
+    say "Feeding done" on both sides), by kind and role as a fallback. None
+    when nothing matches, and the caller then fires no event rather than one
+    HA would drop.
+    """
+    if not event_type:
+        return None
+    key = str(event_type).lower()
+    if key in codes.MQTT_EVENT_TOPICS:
+        return key
+    code = codes.lookup(event_type, device_type)
+    if code is None:
+        return None
+    for name, row in codes.MQTT_EVENT_TOPICS.items():
+        if row.kind == code.kind and row.label == code.label:
+            return name
+    for name, row in codes.MQTT_EVENT_TOPICS.items():
+        if row.kind == code.kind and row.role == code.role:
+            return name
+    return None
+
+
 #: Transport envelope, not telemetry. Every MQTT `params` carries these
 #: alongside the device's actual readings -- confirmed on a live T5, where 186
 #: of 186 `property` posts included `XDevice`.

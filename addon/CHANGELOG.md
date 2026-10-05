@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.1.11 — 2026-10-05
+
+### Feeding events reach Home Assistant
+
+Two things were wrong, both visible in Home Assistant's log the minute a
+YumShare Dual-Hopper fed. The discovery config of every `event` entity carried
+a `value_template` rendering the bare `event_type`, and HA's MQTT event
+platform wants the whole JSON object; it got an int and raised. And the HTTP
+path published the device's numeric code (`4`) where HA expects one of the
+names the entity lists (`feed_over`), so even a parsed event would have been
+dropped. The template is gone, and `event_name_for` matches an HTTP code to
+the MQTT name describing the same thing, by kind and label; an event with no
+name is not fired rather than fired and rejected.
+
+### A nested value path tolerates a missing parent
+
+Three feeder sensors read `state.feedState.*`, which a D4SH gen2 never
+reports, and HA logged a "Template variable error" for each on every state
+report. Intermediate keys are now read through `.get(key, {})`, so a missing
+parent renders the same empty value a missing leaf always did, in silence.
+
 ## 2.1.10 — 2026-10-05
 
 ### A device that only heartbeats is announced to Home Assistant again

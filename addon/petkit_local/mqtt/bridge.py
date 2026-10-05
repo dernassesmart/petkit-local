@@ -35,6 +35,7 @@ from petkit_local.devices.registry import DeviceRegistry
 from petkit_local.devices.state_parsers import apply_consumable_state, normalize_property_params
 from petkit_local.ha.categories import get_setting_fields
 from petkit_local.events import codes, ingest
+from petkit_local.events.normalize import event_name_for
 from petkit_local.events.ingest import (apply_derived_state, apply_state_snapshot,
                                         entity_for_event, telemetry_only)
 from petkit_local.mqtt.ble_relay import BLERelay
@@ -512,8 +513,9 @@ class MQTTBridge:
 
         # Fire the matching HA event entity (momentary).
         entity_suffix = entity_for_event(event_type, device.device_type)
-        if entity_suffix and self._ha_publisher:
-            await self._ha_publisher.publish_event(device, entity_suffix, event_type, params)
+        event_name = event_name_for(event_type, device.device_type)
+        if entity_suffix and event_name and self._ha_publisher:
+            await self._ha_publisher.publish_event(device, entity_suffix, event_name, params)
 
         if self._ha_publisher:
             await self._ha_publisher.publish_state(device)

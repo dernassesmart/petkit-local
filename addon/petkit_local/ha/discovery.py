@@ -245,7 +245,12 @@ def build_discovery_payload(
         # the bridge fires {"event_type": ...} when the device reports an event.
         payload["state_topic"] = f"petkit-local/{device_id}/event/{entity.unique_id_suffix}"
         payload["event_types"] = entity.options
-        payload["value_template"] = "{{ value_json.event_type }}"
+        # No value_template: HA's MQTT event platform parses the payload as a
+        # JSON object and reads `event_type` from it (the other keys become
+        # attributes). A template rendering the bare value handed it an int,
+        # and every feeding event died with "Expected JSON to be parsed as a
+        # dict got <class 'int'>" in Home Assistant's log.
+        payload.pop("value_template", None)
 
     elif entity.component == "image":
         # Raw (non-base64) image bytes retained on `image_topic` — no
@@ -280,8 +285,15 @@ def _value_template(entity: EntityDef) -> str:
 
     parts = entity.value_path.split(".")
     accessor = "value_json"
-    for p in parts:
-        accessor += f".{p}" if p.isidentifier() else f"['{p}']"
+    # Intermediate keys through `.get(key, {})`: a nested path whose parent the
+    # device never reports (a D4SH gen2 has no `state.feedState`) then renders
+    # the same Undefined the `| default` below absorbs, instead of HA logging
+    # a "Template variable error" per publish. The leaf stays attribute-style
+    # so a missing leaf is still Undefined rather than None.
+    for p in parts[:-1]:
+        accessor += f".get('{p}', {{}})"
+    leaf = parts[-1]
+    accessor += f".{leaf}" if leaf.isidentifier() else f"['{leaf}']"
 
     # `| default(...)` matters: a key the device hasn't reported yet is Jinja
     # Undefined, and HA logs a "Template variable warning: 'dict object' has
