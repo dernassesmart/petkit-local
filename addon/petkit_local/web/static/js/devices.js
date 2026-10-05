@@ -799,6 +799,9 @@ function renderPanelBody(d) {
             'Add it as a Generic Camera. Do NOT use the device’s own address below for that: Home Assistant opens a stream with PyAV, and the device’s FLV segfaults libav and restarts the whole of HA. go2rtc stands between the two.',
           )}</label>
       <div style="display:flex;gap:6px;margin-top:4px;align-items:center"><code style="flex:1;overflow-x:auto">${esc(d.streams.rtsp)}</code><button class="mini" data-action="copy-url" data-url="${esc(d.streams.rtsp)}">Copy</button></div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="act" data-action="talk-ptt" data-id="${esc(String(d.id))}" title="Hold to talk through the device speaker">🎙 Hold to talk</button><span class="mut" id="talk-status-${esc(String(d.id))}"></span>${help(
+        'Push-to-talk: hold the button and speak, release to stop. Needs the Two-Way Talk patcher on the Patchers tab and microphone permission in the browser. Half-duplex: the camera audio a Home Assistant card may be playing is not muted here, so expect an echo if both run on the same machine.',
+      )}</div>
       <details class="adv" style="margin-top:6px"><summary>Straight from the device (VLC, ffmpeg — not Home Assistant)</summary>
         ${Object.entries(d.streams)
           .filter(([k]) => k !== 'rtsp')

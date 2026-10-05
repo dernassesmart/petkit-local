@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.9 — 2026-10-05
+
+### Two-way talk has a button now
+
+2.1.0 shipped the server half of the intercom, the `talk` patcher and the
+WebSocket that transcodes a browser microphone for the device speaker, and
+described a panel microphone that was never written. The device page now has
+one, under the live-stream address of a camera model: hold to talk, release
+to stop. Pointer capture makes a release outside the button count, and a tab
+that is hidden mid-talk stops too, so no session outlives the hand on it.
+Before opening the microphone it checks that the patcher is applied and says
+so if not, where the server used to drop the audio in silence.
+
 ## 2.1.8 — 2026-10-05
 
 ### A reply the Provision tab does not understand is shown, not dropped

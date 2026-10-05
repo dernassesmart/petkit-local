@@ -46,6 +46,7 @@ import './timeline.js';
 import './media.js';
 import './pets.js';
 import './cropper.js';
+import './talk.js';
 
 // Is this page the one the server would serve now?
 //
