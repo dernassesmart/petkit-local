@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.14 — 2026-10-05
+
+### The heartbeat tells the add-on where the device is
+
+2.1.13 kept the device's LAN address across a restart, but only once it had
+been learned, and the add-on learned it from the full state report alone,
+which a YumShare Dual-Hopper sends rarely. The first start after that update
+therefore still had no address, and so no stream, no camera in Home Assistant
+and no talk, until the next report. The device polls the heartbeat every ~15 s
+over plain HTTP the whole time; the address that poll comes from is now
+recorded (and followed when it changes), so a camera is probed and served
+within the first half minute after any start. A poll relayed by the TLS
+multiplexer arrives from loopback and is still not recorded.
+
 ## 2.1.13 — 2026-10-05
 
 ### The camera comes back within seconds of a restart, not whenever

@@ -250,6 +250,22 @@ async def handle_heartbeat(request: web.Request) -> web.Response:
             seen = request.app.get("on_device_seen")
             if seen is not None:
                 await seen(device)
+        # The address this poll came from is where the device is: the one the
+        # stream probe (`media/go2rtc.py`), the Patchers tab and two-way talk
+        # all need. The state report also carries it, but a YumShare
+        # Dual-Hopper sends that rarely, and after an add-on restart the
+        # camera, the HA stream and the talk button waited for it -- half an
+        # hour was observed -- while the device had been polling here every
+        # ~15 s the whole time. Not when the poll came through the TLS
+        # multiplexer (`http/tls_mux.py`), which hands it over from loopback.
+        remote = request.remote
+        if remote and remote not in ("127.0.0.1", "::1") and device.state.get("ip") != remote:
+            log.info("Heartbeat %s (id=%d): device address is %s",
+                     device.device_type, device.petkit_id, remote)
+            device.state["ip"] = remote
+            registry = request.app.get("registry")
+            if registry is not None:
+                registry.mark_dirty()
 
         cmds = device.pop_commands()
         if cmds:
