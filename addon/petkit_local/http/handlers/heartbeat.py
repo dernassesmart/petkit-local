@@ -236,8 +236,20 @@ async def handle_heartbeat(request: web.Request) -> web.Response:
 
     if device:
         device.last_heartbeat = time.time()
+        # The logging middleware turns a device's first contact into an
+        # availability publish, but it looks at `online` only AFTER the handler
+        # has run -- and this handler used to set the flag first, so a device
+        # that reports by heartbeat alone was never announced. After an add-on
+        # restart that left it grey in Home Assistant until its next full state
+        # report, which a YumShare Dual-Hopper sends rarely. The transition is
+        # reported from here, with the same hook the middleware uses.
+        was_online = device.online
         device.online = True
         note_iot_status(device, request)
+        if not was_online:
+            seen = request.app.get("on_device_seen")
+            if seen is not None:
+                await seen(device)
 
         cmds = device.pop_commands()
         if cmds:

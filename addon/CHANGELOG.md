@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.10 — 2026-10-05
+
+### A device that only heartbeats is announced to Home Assistant again
+
+After an add-on restart every entity of a YumShare Dual-Hopper stayed
+unavailable while the panel showed the device online and polling. A device's
+first contact is meant to publish its availability: the logging middleware
+checks `online` after the handler ran and announces the flip. The heartbeat
+handler set the flag itself, so by the time the middleware looked there was
+no flip to see, and a device that reports by heartbeat alone was never
+announced until its next full state report. The D4 masked this by sending
+one every minute; the Dual-Hopper sends them rarely. The heartbeat handler now
+reports the transition through the same hook. A test restarts the device's
+state and checks the first heartbeat announces it, and the second does not.
+
 ## 2.1.9 — 2026-10-05
 
 ### Two-way talk has a button now
