@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.12 — 2026-10-05
+
+### Talk is a click, not a hold
+
+2.1.9's hold-to-talk could not be used even once: the first hold asks the
+browser for the microphone, answering that prompt releases the button, and
+the release ended the session before it began, in silence. A short click did
+the same. The button now starts a talk on one click and stops it on the next,
+counting down from 20 seconds; a talk also ends when the tab is hidden or on
+Escape, which is what the hold was for. Each stage says what it is doing next
+to the button, including why it did not start.
+
 ## 2.1.11 — 2026-10-05
 
 ### Feeding events reach Home Assistant

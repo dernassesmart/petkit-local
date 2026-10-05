@@ -1,22 +1,27 @@
 import { BASE, api, toast } from './core.js';
+import { onAction } from './delegate.js';
 
-// ---------------- Two-way talk: push-to-talk from the browser ----------------
+// ---------------- Two-way talk from the browser ----------------
 //
 // The server half has existed since 2.1.0 (`web/api/talk.py` and the `talk`
-// patcher); this is the browser half it never got. Hold the button, speak,
-// release. While held, the microphone is recorded as webm/opus in 250 ms slices
-// and streamed over a WebSocket to `/api/devices/{id}/talk`, which transcodes
-// to the speaker's AAC and pushes it to the sink the patcher installed.
+// patcher); this is the browser half it never got. Click to start, click again
+// to stop. While a talk is on, the microphone is recorded as webm/opus in
+// 250 ms slices and streamed over a WebSocket to `/api/devices/{id}/talk`,
+// which transcodes to the speaker's AAC and pushes it to the sink the patcher
+// installed.
 //
-// Why not click-to-toggle: the sink plays whatever arrives and nothing else
-// stops it, so a talk session that outlives the operator's attention would be
-// an open microphone into somebody's kitchen. Releasing the pointer ends it,
-// and so does losing the pointer (capture is requested so a release outside
-// the button still counts). Half-duplex: nothing here mutes the camera audio
-// a Home Assistant card may be playing on the same machine.
+// Why a toggle and not hold-to-talk (which 2.1.9 shipped): the first use asks
+// the browser for microphone permission, and answering that prompt means
+// releasing the button -- which ended the hold before anything happened, with
+// no word about why. A quick click did the same. What hold-to-talk bought,
+// that a session cannot outlive the operator's attention, is kept another
+// way: every talk ends by itself after TALK_MAX_SECONDS, when the tab is
+// hidden, or on Escape. Half-duplex: nothing here mutes the camera audio a
+// Home Assistant card may be playing on the same machine.
+
+const TALK_MAX_SECONDS = 20;
 
 let session = null; // the one talk in progress, if any
-let pressed = false; // pointer still down? checked after each await in start()
 
 function status(id, text) {
   const el = document.getElementById('talk-status-' + id);
@@ -25,81 +30,110 @@ function status(id, text) {
 
 async function start(id, btn) {
   if (session) return;
-  pressed = true;
-  // Without the patcher's sink the server connects to nothing and drops the
-  // audio in silence (its ffmpeg exits at once); say so instead.
-  let p = null;
+  btn.disabled = true;
+  status(id, 'checking…');
   try {
-    p = await api('devices/' + id + '/patcher');
-  } catch (e) {
-    /* fall through: the server will report the real problem */
-  }
-  if (!pressed) return;
-  const talk = p && p.patchers && p.patchers.talk;
-  if (p && !(talk && talk.applied)) {
-    toast('Apply the Two-Way Talk patcher first (Patchers tab).');
-    return;
-  }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (e) {
-    toast('Microphone not available: ' + e.name);
-    return;
-  }
-  if (!pressed) {
-    stream.getTracks().forEach(t => t.stop());
-    return;
-  }
-  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-    ? 'audio/webm;codecs=opus'
-    : 'audio/webm';
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(proto + '//' + location.host + BASE + 'api/devices/' + id + '/talk');
-  const s = { id, ws, stream, rec: null, btn, label: btn.textContent };
-  session = s;
-  btn.textContent = '● connecting…';
-  ws.onopen = () => {
-    if (session !== s) return;
-    ws.send(JSON.stringify({ type: 'talk_start' }));
-    s.rec = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32000 });
-    s.rec.ondataavailable = ev => {
-      if (ev.data.size && ws.readyState === WebSocket.OPEN) {
-        ev.data.arrayBuffer().then(buf => {
-          if (ws.readyState === WebSocket.OPEN) ws.send(buf);
-        });
-      }
-    };
-    s.rec.start(250);
-    btn.textContent = '● talking — release to stop';
-    status(id, '');
-  };
-  ws.onmessage = ev => {
-    let m;
+    // Without the patcher's sink the server connects to nothing and drops
+    // the audio in silence (its ffmpeg exits at once); say so instead.
+    let p = null;
     try {
-      m = JSON.parse(ev.data);
+      p = await api('devices/' + id + '/patcher');
     } catch (e) {
+      /* fall through: the server will report the real problem */
+    }
+    const talk = p && p.patchers && p.patchers.talk;
+    if (p && !(talk && talk.applied)) {
+      toast('Apply the Two-Way Talk patcher first (Patchers tab).');
+      status(id, 'Two-Way Talk patcher not applied');
       return;
     }
-    if (m.type === 'error') {
-      toast(m.msg || 'talk failed');
-      stop();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast('This browser offers no microphone here (needs HTTPS).');
+      status(id, 'no microphone access on this page');
+      return;
     }
-  };
-  ws.onerror = () => {
-    toast('Talk connection failed.');
-    stop();
-  };
-  ws.onclose = () => {
-    if (session === s) stop();
-  };
+    let stream;
+    try {
+      status(id, 'asking for the microphone…');
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      toast('Microphone not available: ' + e.name);
+      status(id, 'microphone refused (' + e.name + ')');
+      return;
+    }
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm';
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(proto + '//' + location.host + BASE + 'api/devices/' + id + '/talk');
+    const s = {
+      id,
+      ws,
+      stream,
+      rec: null,
+      btn,
+      label: btn.textContent,
+      left: TALK_MAX_SECONDS,
+      timer: null,
+    };
+    session = s;
+    btn.textContent = '● connecting…';
+    status(id, '');
+    ws.onopen = () => {
+      if (session !== s) return;
+      ws.send(JSON.stringify({ type: 'talk_start' }));
+      s.rec = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32000 });
+      s.rec.ondataavailable = ev => {
+        if (ev.data.size && ws.readyState === WebSocket.OPEN) {
+          ev.data.arrayBuffer().then(buf => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(buf);
+          });
+        }
+      };
+      s.rec.start(250);
+      const tick = () => {
+        if (session !== s) return;
+        btn.textContent = '■ Stop talking (' + s.left + ' s)';
+        if (s.left <= 0) {
+          stop();
+          return;
+        }
+        s.left -= 1;
+        s.timer = setTimeout(tick, 1000);
+      };
+      tick();
+    };
+    ws.onmessage = ev => {
+      let m;
+      try {
+        m = JSON.parse(ev.data);
+      } catch (e) {
+        return;
+      }
+      if (m.type === 'error') {
+        toast(m.msg || 'talk failed');
+        status(id, m.msg || 'talk failed');
+        stop();
+      }
+    };
+    ws.onerror = () => {
+      toast('Talk connection failed.');
+      status(id, 'connection failed');
+      stop();
+    };
+    ws.onclose = () => {
+      if (session === s) stop();
+    };
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function stop() {
-  pressed = false;
   const s = session;
   if (!s) return;
   session = null;
+  if (s.timer) clearTimeout(s.timer);
   try {
     if (s.rec && s.rec.state !== 'inactive') s.rec.stop();
   } catch (e) {
@@ -118,29 +152,20 @@ function stop() {
     /* socket already gone */
   }
   s.btn.textContent = s.label;
-  status(s.id, '');
 }
 
-document.addEventListener('pointerdown', ev => {
-  const btn = ev.target.closest('[data-action="talk-ptt"]');
-  if (!btn) return;
-  ev.preventDefault();
-  if (btn.setPointerCapture) {
-    try {
-      btn.setPointerCapture(ev.pointerId);
-    } catch (e) {
-      /* capture is best effort */
-    }
+onAction('talk-ptt', btn => {
+  if (session) {
+    stop();
+    return;
   }
   start(Number(btn.dataset.id), btn);
 });
-for (const type of ['pointerup', 'pointercancel']) {
-  document.addEventListener(type, () => {
-    if (pressed || session) stop();
-  });
-}
-// A page that disappears mid-talk (tab switch, navigation) must not leave the
-// microphone or the sink open.
+
+// A talk must not outlive the page it was started from.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stop();
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') stop();
 });
