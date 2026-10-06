@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.16 — 2026-10-06
+
+### Two-way talk on the YumShare Dual-Hopper 2: the sink no longer drops the call
+
+2.1.15 let the sink's `pktool` load, and the talk still ended in "Connection
+reset by peer" within a second. Traced on the device with `sh -x`: the sink's
+`cat > $F` blocks in open() until `media` opens the pipe to read it, and on
+this firmware `pktool` exits about 50 ms after sending its play message --
+before `media` gets there. Its SIGCHLD cut the open short ("can't create
+/tmp/pktalk.N: Interrupted system call"), the script fell through, and the
+device closed the connection with no audio written. The pipe is now opened
+read+write by the shell before `pktool` starts, which never blocks and cannot
+be interrupted; `cat` writes through that descriptor and closing it at the end
+is what hands `media` its end-of-stream. Verified on the device: a 10-second
+stream with a 1.2-second silent lead-in plays through.
+
+Remove and re-apply is not needed: one "Apply" of "Two-Way Talk" on the
+Patchers tab writes the new sink script (the device reboots once).
+
 ## 2.1.15 — 2026-10-05
 
 ### Two-way talk on the YumShare Dual-Hopper 2: the sink can now load pktool

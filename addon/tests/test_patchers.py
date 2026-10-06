@@ -247,6 +247,19 @@ def test_the_talk_sink_loads_pktool_on_the_axera_models_too():
         assert d in path, f"{d} missing: pktool cannot load on the Axera models"
 
 
+def test_the_talk_sink_never_blocks_on_opening_its_pipe():
+    """`cat > $F` blocked in open() until media read the pipe, and on the Axera
+    models pktool's exit interrupted that wait ("Interrupted system call") --
+    the script fell through and the device closed the connection unheard."""
+    from petkit_local.patchers.common import TALK_SINK_SCRIPT
+
+    lines = [ln.strip() for ln in TALK_SINK_SCRIPT.splitlines()]
+    assert "exec 3<>$F" in lines, "the pipe is opened read+write up front"
+    assert lines.index("exec 3<>$F") < next(i for i, ln in enumerate(lines) if "pktool play_aac" in ln)
+    assert "cat >&3" in lines and "cat > $F" not in lines
+    assert lines.index("cat >&3") < lines.index("exec 3>&-"), "closing fd 3 is media's EOF"
+
+
 def test_talk_sink_file_installed_in_store():
     """The sink script is a real file in the patch store (not a /tmp heredoc), so
     it must resolve to a store path and thus be deleted on removal."""
