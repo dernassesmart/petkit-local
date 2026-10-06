@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.18 — 2026-10-06
+
+### WebRTC ports are opt-in
+
+2.1.17 mapped 8555/tcp and 8555/udp by default, and on a host where that port
+is already taken -- Frigate's go2rtc uses it -- Docker refused to start the
+updated container, leaving the add-on down after the update. The two ports
+are unmapped by default now; map both to any free host port in the add-on's
+Network settings to turn WebRTC on. The port actually published is what gets
+advertised, so any number works.
+
 ## 2.1.17 — 2026-10-06
 
 ### Sub-second live view and two-way talk the WebRTC way, phone app included

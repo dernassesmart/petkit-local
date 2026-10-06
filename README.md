@@ -185,7 +185,8 @@ sound, and the viewer's microphone carried straight to the speaker. Home Assista
 card has no microphone button yet, so the consumer is the **WebRTC Camera** integration from HACS:
 
 1. Add-on **Configuration**: set `go2rtc_api_password`, and under **Network** map `1984/tcp`
-   (8555 is mapped by default). Restart the add-on.
+   and both `8555` ports (any free host port; 8555 itself is taken where Frigate runs). Restart
+   the add-on.
 2. HACS: download **WebRTC Camera** (AlexxIT), restart Home Assistant, then add the integration
    with the server URL `http://petkit:<password>@<HA host IP>:1984`.
 3. A card, with the stream named by the device's PetKit id:
@@ -207,7 +208,7 @@ on a device with the Two-Way Talk patcher applied; without it the card plays vid
 | `80` | `80` | Device HTTP API. The ESP32 models dial it from firmware and cannot be told otherwise. |
 | `443` | `443` | One TLS listener for two protocols: the device's HTTPS API calls and its MQTT session, told apart by the first byte. |
 | `9000` | `9000` | Media upload bucket for the camera models. |
-| `8555` | `8555` | WebRTC media (UDP and TCP) from the bundled go2rtc, for the live view and talk below. Unmap both to keep WebRTC off. |
+| `8555` | — | Optional: WebRTC media (UDP and TCP) from the bundled go2rtc, for the live view and talk below. Map both to any free host port. |
 | `1984` | — | Optional: go2rtc's API for the WebRTC Camera integration. Served only with `go2rtc_api_password` set, behind basic auth. |
 
 The web panel is reached through Ingress only. Nothing else needs to be exposed.

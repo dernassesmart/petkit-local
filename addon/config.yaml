@@ -1,6 +1,6 @@
 name: "PetKit Local"
 description: "Local cloud replacement for PetKit litter boxes, feeders, fountains and accessories"
-version: "2.1.17"
+version: "2.1.18"
 slug: "petkitlocal"
 url: "https://github.com/dernassesmart/petkit-local"
 # Pull a published image rather than building on the user's machine. One
@@ -40,8 +40,8 @@ ports:
   1883/tcp: null
   8099/tcp: null
   8554/tcp: null
-  8555/tcp: 8555
-  8555/udp: 8555
+  8555/tcp: null
+  8555/udp: null
   1984/tcp: null
   9000/tcp: 9000
 ports_description:
@@ -50,7 +50,7 @@ ports_description:
   1883/tcp: "Optional: expose the plain MQTT listener (internal by default; map a host port only if a device connects plaintext)."
   8099/tcp: "Optional: expose the web panel directly on the LAN (no HA auth) for debugging/curl. Leave unmapped to use auth-only Ingress."
   8554/tcp: "Camera RTSP, from the bundled go2rtc. Home Assistant reaches this over the internal network without a host port, so leave it unmapped unless you want the stream on your LAN. Mapping it to 8554 would clash with the go2rtc add-on."
-  8555/udp: "WebRTC media from the bundled go2rtc: a browser on the LAN watches sub-second and talks back through it. Unmap both 8555 ports to keep WebRTC off. Home Assistant's own go2rtc uses 18555, so there is no clash."
+  8555/udp: "Optional: WebRTC media from the bundled go2rtc, for sub-second live view and talk in a browser or the Companion app (WebRTC Camera integration). Map it together with 8555/tcp to any free host port; 8555 itself is taken on a host that runs Frigate, and Home Assistant's own go2rtc uses 18555. Unmapped, WebRTC stays off."
   8555/tcp: "WebRTC media over TCP, the fallback for a browser that cannot use UDP (card mode webrtc/tcp). Map it together with 8555/udp."
   1984/tcp: "Optional: go2rtc's HTTP API for the WebRTC Camera integration (HACS), which is what puts a microphone button on the Home Assistant camera card. Served only when go2rtc_api_password is set, behind basic auth (user petkit): this API can register exec: sources, which is a shell on the host."
   9000/tcp: "Local S3/OSS bucket — device uploads photos/videos/events here instead of PetKit cloud. Files appear in HA media browser."
