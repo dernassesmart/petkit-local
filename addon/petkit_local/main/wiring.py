@@ -192,7 +192,10 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
     # ask it for an RTSP URL; it starts nothing until `start_background` and
     # nothing at all unless a device is actually serving a stream.
     go2rtc = Go2rtc(registry, data_dir=config.data_dir,
-                    on_change=partial(_republish_camera_state, ha_publisher, registry))
+                    on_change=partial(_republish_camera_state, ha_publisher, registry),
+                    host_candidate=config.webrtc_candidate,
+                    api_password=config.go2rtc_api_password,
+                    api_public=config.go2rtc_api_published)
     # `--no-ha` leaves the publisher as None, and that is a supported way to run
     # this — the local cloud and the panel work with no Home Assistant at all.
     if ha_publisher is not None:

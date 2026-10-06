@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.1.17 — 2026-10-06
+
+### Sub-second live view and two-way talk the WebRTC way, phone app included
+
+The panel's talk button records the microphone in quarter-second slices and
+transcodes them on the way, so a word takes about a second to come out of the
+feeder, and the recording format it relies on does not exist in Safari or the
+iOS Companion app. WebRTC does both better: it is what the browser and the app
+already speak, and its audio arrives in milliseconds.
+
+This release carries upstream PR #24 (shinn-y): go2rtc's WebRTC listener, an
+Opus audio track for it (WebRTC cannot carry the device's AAC), a same-origin
+proxy for the streaming part of go2rtc's API, and optional TURN. On top of
+that, for an add-on behind the Supervisor's bridge network, which that PR
+left with WebRTC off:
+
+- **The host and its published port are advertised as the WebRTC candidate.**
+  Ports 8555/tcp and 8555/udp are mapped by default; unmap them to keep
+  WebRTC off. Home Assistant's own go2rtc uses 18555, so nothing clashes.
+- **A talk backchannel per camera with the Two-Way Talk patcher.** go2rtc
+  hands the viewer's microphone (raw A-law) to an ffmpeg that transcodes it
+  to the device's AAC and sends it to the same sink the panel uses.
+- **The go2rtc API can be published for the WebRTC Camera integration**
+  (HACS), which is what puts a microphone button on a Home Assistant camera
+  card, in a browser or the Companion app over HTTPS. Set the new
+  `go2rtc_api_password` option and map 1984/tcp; the API is then served behind
+  basic auth (user `petkit`). Without a password it stays on loopback no
+  matter what is mapped, because that API can register `exec:` sources.
+
 ## 2.1.16 — 2026-10-06
 
 ### Two-way talk on the YumShare Dual-Hopper 2: the sink no longer drops the call

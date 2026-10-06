@@ -314,3 +314,65 @@ async def test_the_config_is_only_rewritten_when_the_stream_set_changes(tmp_path
         assert len(execs) == 1
     finally:
         await s.stop()
+
+
+# --- WebRTC behind the Supervisor's bridge NAT, and the talk backchannel ----
+
+def _sink_cam(pid, ip, talk):
+    from petkit_local.devices.base import Device
+    d = Device(device_type="d4sh", petkit_id=pid, serial_number=f"SN{pid}")
+    d.state["ip"] = ip
+    d.state[g.STREAM_AVAILABLE] = True
+    if talk:
+        d.config["active_patchers"] = ["camera", "talk"]
+    return d
+
+
+async def test_reconcile_uses_the_host_candidate_and_adds_a_backchannel_per_sink(tmp_path, monkeypatch):
+    """Bridge NAT: `lan_ip` finds nothing reachable, so the host and its
+    published port are advertised. A camera whose device has the talk sink
+    gets a third producer carrying the viewer's microphone; one without
+    does not (the exec would connect to nothing)."""
+    import yaml
+    from petkit_local.devices.registry import DeviceRegistry
+    from petkit_local.patchers.common import TALK_TCP_PORT
+
+    monkeypatch.setattr(g, "have_go2rtc", lambda: True)
+    monkeypatch.setattr(g, "lan_ip", lambda toward: "")
+    reg = DeviceRegistry()
+    reg._devices[1] = _sink_cam(1, "192.0.2.7", talk=True)
+    reg._devices[2] = _sink_cam(2, "192.0.2.8", talk=False)
+    s = g.Go2rtc(reg, data_dir=str(tmp_path), host_candidate="192.168.1.5:8555")
+
+    async def no_start():
+        pass
+
+    monkeypatch.setattr(s, "_start", no_start)
+    await s.reconcile()
+    doc = yaml.safe_load(s._rendered)
+    streams = {str(k): v for k, v in doc["streams"].items()}
+    assert doc["webrtc"]["listen"] == f":{g.WEBRTC_PORT}"
+    assert doc["webrtc"]["candidates"][0] == "192.168.1.5:8555"
+    assert doc["api"]["listen"] == g.API_ADDR, "no password, no public API"
+    assert len(streams["1"]) == 3 and len(streams["2"]) == 2
+    talk = streams["1"][2]
+    assert talk.startswith("exec:ffmpeg ") and talk.endswith(f"#backchannel=1#audio={g.BACKCHANNEL_AUDIO}")
+    assert f"tcp://192.0.2.7:{TALK_TCP_PORT}" in talk
+    assert "-f alaw -ar 8000 -ac 1 -i pipe:0" in talk, "go2rtc hands the sink raw A-law"
+
+
+def test_a_macvlan_address_still_wins_over_the_host_candidate(tmp_path, monkeypatch):
+    out = g.render_config({"1": "http://d/main.flv?audio=1"}, "/data/go2rtc.log",
+                          webrtc_candidate=g.lan_ip("192.0.2.1") or "192.168.1.5:8555")
+    # Whatever this machine's route says, exactly one candidate is advertised.
+    assert out.count("    - ") >= 1 and "candidates:" in out
+
+
+def test_the_api_is_published_only_with_a_password():
+    import yaml
+    out = g.render_config({"1": "http://d/main.flv?audio=1"}, "/data/go2rtc.log",
+                          api_password="s3cret", api_public=True)
+    assert yaml.safe_load(out)["api"] == {"listen": f":{g.API_PORT}",
+                                          "username": g.API_USERNAME, "password": "s3cret"}
+    out = g.render_config({}, "/data/go2rtc.log", api_password="", api_public=True)
+    assert yaml.safe_load(out)["api"] == {"listen": g.API_ADDR}

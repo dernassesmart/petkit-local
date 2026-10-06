@@ -311,3 +311,26 @@ def test_from_file_names_the_file_on_bad_json():
             raised = str(e)
 
         assert "config.json" in raised, "the error must name the file it choked on"
+
+
+# --- WebRTC candidate and go2rtc API exposure -------------------------------
+
+def test_the_webrtc_candidate_is_the_host_and_its_published_port():
+    c = _from_ha_addon_with({}, host_ip="192.168.1.5",
+                            ports={"8555/tcp": 18555, "8555/udp": 18555})
+    assert c.webrtc_candidate == "192.168.1.5:18555"
+    c = _from_ha_addon_with({}, host_ip="192.168.1.5", ports={"8555/tcp": None})
+    assert c.webrtc_candidate == "", "unmapped: WebRTC stays off"
+    c = _from_ha_addon_with({}, host_ip=None, ports={"8555/tcp": 8555})
+    assert c.webrtc_candidate == "", "no host address to advertise"
+
+
+def test_the_go2rtc_api_goes_public_only_with_a_mapping_and_a_password():
+    c = _from_ha_addon_with({"go2rtc_api_password": "x"}, host_ip="192.168.1.5",
+                            ports={"1984/tcp": 1984})
+    assert c.go2rtc_api_published and c.go2rtc_api_password == "x"
+    c = _from_ha_addon_with({"go2rtc_api_password": "x"}, host_ip="192.168.1.5",
+                            ports={"1984/tcp": None})
+    assert not c.go2rtc_api_published, "not mapped: nothing to publish on"
+    c = _from_ha_addon_with({}, host_ip="192.168.1.5", ports={"1984/tcp": 1984})
+    assert not c.go2rtc_api_published, "mapped without a password stays on loopback"

@@ -172,6 +172,34 @@ expected on every ESP32 model, costs nothing, and is why the heartbeat is the co
 Purobot, YumShare and EverSweet Ultra AI enforce HTTPS and pin the cloud's CA, so for them the
 route is Bluetooth provisioning plus the **Patchers** tab, exactly as upstream documents.
 
+## 🎙 Live view and two-way talk
+
+The camera models stream to Home Assistant as a Generic Camera over RTSP, and the panel's
+**🎙 Talk** button speaks through the device (apply **Two-Way Talk** on the Patchers tab first).
+That button records in quarter-second slices and transcodes on the way, so expect about a second
+of delay, and it needs a desktop browser: Safari and the iOS Companion app cannot record the
+format it uses.
+
+WebRTC does both better, and since 2.1.17 the bundled go2rtc offers it: sub-second video with
+sound, and the viewer's microphone carried straight to the speaker. Home Assistant's own camera
+card has no microphone button yet, so the consumer is the **WebRTC Camera** integration from HACS:
+
+1. Add-on **Configuration**: set `go2rtc_api_password`, and under **Network** map `1984/tcp`
+   (8555 is mapped by default). Restart the add-on.
+2. HACS: download **WebRTC Camera** (AlexxIT), restart Home Assistant, then add the integration
+   with the server URL `http://petkit:<password>@<HA host IP>:1984`.
+3. A card, with the stream named by the device's PetKit id:
+
+   ```yaml
+   type: custom:webrtc-camera
+   url: "300039037"
+   media: video,audio,microphone
+   ui: true
+   ```
+
+The microphone needs HTTPS — a browser rule, and the same for the Companion app. Talk only works
+on a device with the Two-Way Talk patcher applied; without it the card plays video and sound only.
+
 ## 🔌 Ports
 
 | Container port | Host port | Purpose |
@@ -179,6 +207,8 @@ route is Bluetooth provisioning plus the **Patchers** tab, exactly as upstream d
 | `80` | `80` | Device HTTP API. The ESP32 models dial it from firmware and cannot be told otherwise. |
 | `443` | `443` | One TLS listener for two protocols: the device's HTTPS API calls and its MQTT session, told apart by the first byte. |
 | `9000` | `9000` | Media upload bucket for the camera models. |
+| `8555` | `8555` | WebRTC media (UDP and TCP) from the bundled go2rtc, for the live view and talk below. Unmap both to keep WebRTC off. |
+| `1984` | — | Optional: go2rtc's API for the WebRTC Camera integration. Served only with `go2rtc_api_password` set, behind basic auth. |
 
 The web panel is reached through Ingress only. Nothing else needs to be exposed.
 

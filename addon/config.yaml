@@ -1,6 +1,6 @@
 name: "PetKit Local"
 description: "Local cloud replacement for PetKit litter boxes, feeders, fountains and accessories"
-version: "2.1.16"
+version: "2.1.17"
 slug: "petkitlocal"
 url: "https://github.com/dernassesmart/petkit-local"
 # Pull a published image rather than building on the user's machine. One
@@ -40,6 +40,9 @@ ports:
   1883/tcp: null
   8099/tcp: null
   8554/tcp: null
+  8555/tcp: 8555
+  8555/udp: 8555
+  1984/tcp: null
   9000/tcp: 9000
 ports_description:
   80/tcp: "PetKit device API (plain HTTP). A remap is honoured — the host port is put in the address devices are handed — but prefer host 80 anyway: a device redirected by DNS dials 80 with nowhere to tell it otherwise, and an ESP32 model provisioned with another port reaches Wi-Fi and then fails to reach the server."
@@ -47,6 +50,9 @@ ports_description:
   1883/tcp: "Optional: expose the plain MQTT listener (internal by default; map a host port only if a device connects plaintext)."
   8099/tcp: "Optional: expose the web panel directly on the LAN (no HA auth) for debugging/curl. Leave unmapped to use auth-only Ingress."
   8554/tcp: "Camera RTSP, from the bundled go2rtc. Home Assistant reaches this over the internal network without a host port, so leave it unmapped unless you want the stream on your LAN. Mapping it to 8554 would clash with the go2rtc add-on."
+  8555/udp: "WebRTC media from the bundled go2rtc: a browser on the LAN watches sub-second and talks back through it. Unmap both 8555 ports to keep WebRTC off. Home Assistant's own go2rtc uses 18555, so there is no clash."
+  8555/tcp: "WebRTC media over TCP, the fallback for a browser that cannot use UDP (card mode webrtc/tcp). Map it together with 8555/udp."
+  1984/tcp: "Optional: go2rtc's HTTP API for the WebRTC Camera integration (HACS), which is what puts a microphone button on the Home Assistant camera card. Served only when go2rtc_api_password is set, behind basic auth (user petkit): this API can register exec: sources, which is a shell on the host."
   9000/tcp: "Local S3/OSS bucket — device uploads photos/videos/events here instead of PetKit cloud. Files appear in HA media browser."
 # Use the Supervisor MQTT service if it's available (Mosquitto add-on), but
 # don't require it — many people run an external broker or none at all.
@@ -86,6 +92,9 @@ options:
   mqtt_tls: true
   mqtt_tls_port: 443
   mqtt_strict_auth: false
+  # go2rtc's HTTP API on the host, for the WebRTC Camera integration (HACS):
+  # map 1984/tcp in Network as well. Empty keeps the API on loopback.
+  go2rtc_api_password: ""
   # NOTE: proxy mode and payload capture are deliberately NOT options here.
   # Both are debugging switches you flip while watching a device, so they live
   # in the panel's Setup -> Settings and persist to
@@ -102,5 +111,6 @@ schema:
   mqtt_tls: bool
   mqtt_tls_port: port
   mqtt_strict_auth: bool
+  go2rtc_api_password: password?
 startup: application
 boot: auto
