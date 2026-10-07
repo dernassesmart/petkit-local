@@ -452,3 +452,50 @@ async def test_reconcile_renders_the_extra_streams_and_finds_a_candidate_through
     assert doc["streams"] == DOORBELL
     assert doc["webrtc"]["candidates"][0] == "192.168.1.5:8565"
     assert probed == ["192.0.2.9"]
+
+
+# --- extra WebRTC candidates (`go2rtc_webrtc_candidates`) -------------------
+
+def test_extra_candidates_follow_the_lan_candidate_in_order():
+    """The LAN candidate stays first: the browser prefers the first one that
+    works, and on the LAN that is the direct address."""
+    import yaml
+    out = g.render_config({"1": "http://d/main.flv?audio=1"}, "/data/go2rtc.log",
+                          webrtc_candidate="192.168.1.5:8565",
+                          extra_candidates=["stun:8565", "home.example.org:8565"])
+    doc = yaml.safe_load(out)
+    assert doc["webrtc"]["listen"] == f":{g.WEBRTC_PORT}"
+    assert doc["webrtc"]["candidates"] == ["192.168.1.5:8565", "stun:8565",
+                                           "home.example.org:8565"]
+
+
+def test_extra_candidates_alone_turn_webrtc_on():
+    import yaml
+    out = g.render_config({}, "/data/go2rtc.log", extra_candidates=["stun:8565"])
+    assert yaml.safe_load(out)["webrtc"]["candidates"] == ["stun:8565"]
+
+
+def test_no_candidates_leaves_webrtc_off_as_before():
+    out = g.render_config({}, "/data/go2rtc.log", extra_candidates=[])
+    assert "webrtc:\n  listen: ''" in out
+
+
+def test_a_duplicate_or_blank_extra_candidate_is_not_announced_twice():
+    import yaml
+    out = g.render_config({}, "/data/go2rtc.log", webrtc_candidate="192.168.1.5:8565",
+                          extra_candidates=["192.168.1.5:8565", "", "stun:8565"])
+    assert yaml.safe_load(out)["webrtc"]["candidates"] == ["192.168.1.5:8565", "stun:8565"]
+
+
+async def test_reconcile_passes_the_extra_candidates_through(tmp_path, monkeypatch):
+    import yaml
+    monkeypatch.setattr(g, "lan_ip", lambda toward: "")
+    s = g.Go2rtc(_registry(_cam()), data_dir=str(tmp_path), host_candidate="192.168.1.5:8565",
+                 extra_candidates=["stun:8565"])
+
+    async def no_start():
+        pass
+
+    monkeypatch.setattr(s, "_start", no_start)
+    await s.reconcile()
+    assert yaml.safe_load(s._rendered)["webrtc"]["candidates"] == ["192.168.1.5:8565", "stun:8565"]

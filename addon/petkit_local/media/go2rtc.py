@@ -236,7 +236,8 @@ def render_config(streams: dict[str, str], log_path: str,
                   webrtc_candidate: str = "",
                   backchannels: dict[str, str] | None = None,
                   api_password: str = "", api_public: bool = False,
-                  extra_streams: dict[str, list[str]] | None = None) -> str:
+                  extra_streams: dict[str, list[str]] | None = None,
+                  extra_candidates: list[str] | None = None) -> str:
     """The go2rtc YAML for `streams`, as `{name: source url}`.
 
     Hand-rendered rather than via PyYAML: it is a fixed short document with one
@@ -248,6 +249,15 @@ def render_config(streams: dict[str, str], log_path: str,
     which only exists on a macvlan / host-network install. With one, go2rtc
     listens on WEBRTC_PORT and advertises exactly that candidate — the browser
     then gets sub-second WebRTC instead of buffered MSE.
+
+    `extra_candidates` (the `go2rtc_webrtc_candidates` option) follow the LAN
+    candidate verbatim, in go2rtc's own syntax: `stun:8565` announces the
+    public address STUN reports with that port, a hostname or address does
+    the same without asking. They are what lets a browser OFF the LAN reach
+    WebRTC once the router forwards the port; the STUN `ice_servers` entry
+    alone does not, because the reflexive candidate it yields carries whatever
+    random port the router mapped for the STUN exchange. Order matters to the
+    browser (first wins), so the LAN candidate stays first.
 
     `backchannels` names the streams whose device has the talk sink
     (`{stream name: device ip}`); each gets a third, on-demand producer that
@@ -267,13 +277,19 @@ def render_config(streams: dict[str, str], log_path: str,
     carries its two-way audio. A name that collides with a device stream is
     skipped: the device's stream is the one the panel and the sensor point at.
     """
+    candidates: list[str] = []
     if webrtc_candidate:
-        cand = webrtc_candidate if ":" in webrtc_candidate else f"{webrtc_candidate}:{WEBRTC_PORT}"
+        candidates.append(webrtc_candidate if ":" in webrtc_candidate
+                          else f"{webrtc_candidate}:{WEBRTC_PORT}")
+    for c in extra_candidates or []:
+        if c and c not in candidates:
+            candidates.append(c)
+    if candidates:
         webrtc_lines = [
             "webrtc:",
             f"  listen: ':{WEBRTC_PORT}'",
             "  candidates:",
-            f"    - {cand}",
+            *(f"    - {c}" for c in candidates),
             # A STUN server so go2rtc also offers a reflexive candidate — its
             # home public address. Off the LAN the browser reaches it via a
             # Cloudflare TURN relay (see media/turn.py); on the LAN the host
@@ -356,7 +372,8 @@ class Go2rtc:
     def __init__(self, registry: DeviceRegistry, *, data_dir: str,
                  on_change: Any | None = None, host_candidate: str = "",
                  api_password: str = "", api_public: bool = False,
-                 extra_streams: dict[str, list[str]] | None = None) -> None:
+                 extra_streams: dict[str, list[str]] | None = None,
+                 extra_candidates: list[str] | None = None) -> None:
         """
         Args:
             on_change: Awaited after the child starts or stops, so whatever
@@ -376,6 +393,8 @@ class Go2rtc:
         #: `go2rtc_extra_streams`: served whenever go2rtc runs, and reason
         #: enough to run it with no PetKit camera at all (see `wanted`).
         self._extra_streams = dict(extra_streams or {})
+        #: `go2rtc_webrtc_candidates`, announced after the LAN candidate.
+        self._extra_candidates = list(extra_candidates or [])
         self._config_path = os.path.join(data_dir, "go2rtc.yaml")
         self._log_path = os.path.join(data_dir, "go2rtc.log")
         self._proc: asyncio.subprocess.Process | None = None
@@ -530,7 +549,8 @@ class Go2rtc:
                                backchannels=self.desired_backchannels(),
                                api_password=self._api_password,
                                api_public=self._api_public,
-                               extra_streams=self._extra_streams)
+                               extra_streams=self._extra_streams,
+                               extra_candidates=self._extra_candidates)
         if self.running and config == self._rendered:
             return
 

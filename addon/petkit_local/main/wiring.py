@@ -196,7 +196,8 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
                     host_candidate=config.webrtc_candidate,
                     api_password=config.go2rtc_api_password,
                     api_public=config.go2rtc_api_published,
-                    extra_streams=config.go2rtc_extra_streams)
+                    extra_streams=config.go2rtc_extra_streams,
+                    extra_candidates=config.go2rtc_webrtc_candidates)
     # `--no-ha` leaves the publisher as None, and that is a supported way to run
     # this — the local cloud and the panel work with no Home Assistant at all.
     if ha_publisher is not None:

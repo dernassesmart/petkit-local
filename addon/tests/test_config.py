@@ -363,3 +363,18 @@ def test_a_broken_extra_stream_entry_is_dropped_not_fatal():
     ]})
     assert c.go2rtc_extra_streams == {"ok": ["rtsp://single"]}
     assert _from_ha_addon_with({"go2rtc_extra_streams": "nope"}).go2rtc_extra_streams == {}
+
+
+# --- go2rtc_webrtc_candidates -----------------------------------------------
+
+def test_webrtc_candidates_are_read_trimmed_and_deduplicated():
+    c = _from_ha_addon_with({"go2rtc_webrtc_candidates": [" stun:8565 ", "", "stun:8565",
+                                                           "home.example.org:8565", None]})
+    assert c.go2rtc_webrtc_candidates == ["stun:8565", "home.example.org:8565"]
+
+
+def test_webrtc_candidates_default_to_nothing_and_never_raise():
+    assert _from_ha_addon_with({}).go2rtc_webrtc_candidates == []
+    assert _from_ha_addon_with({"go2rtc_webrtc_candidates": []}).go2rtc_webrtc_candidates == []
+    assert _from_ha_addon_with({"go2rtc_webrtc_candidates": {"a": 1}}).go2rtc_webrtc_candidates == []
+    assert _from_ha_addon_with({"go2rtc_webrtc_candidates": "stun:8565"}).go2rtc_webrtc_candidates == ["stun:8565"]

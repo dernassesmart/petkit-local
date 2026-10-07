@@ -48,6 +48,7 @@ PetKit device ──HTTP───► petkit-local ──MQTT discovery──► 
 | `mqtt_strict_auth` | `false` | Enforce the Aliyun HMAC signature. Off by default so a signature nuance cannot lock a device out. |
 | `go2rtc_api_password` | *(empty)* | Publishes the bundled go2rtc's HTTP API on `1984/tcp` (map that port too) behind basic auth, user `petkit`, for the **WebRTC Camera** integration (HACS). Empty keeps the API inside the container. |
 | `go2rtc_extra_streams` | `[]` | Streams the bundled go2rtc serves besides the PetKit cameras — see [Other cameras through the same go2rtc](#other-cameras-through-the-same-go2rtc). |
+| `go2rtc_webrtc_candidates` | `[]` | WebRTC addresses announced after the LAN one, for viewers outside your LAN — see [WebRTC from outside the LAN](#webrtc-from-outside-the-lan). |
 
 Payload capture and proxy mode are **not** options here. Both are things you turn on
 while watching a device, so they live in the panel's **Setup → Settings**, take
@@ -173,6 +174,30 @@ and *API operator* permissions. An entry without a name or a source is logged
 and skipped, and go2rtc runs for these streams even when no PetKit camera is
 patched. Nothing is added to them — no audio transcode, no backchannel — so
 a source has to bring its own.
+
+### WebRTC from outside the LAN
+
+On the LAN a browser reaches go2rtc's WebRTC port directly. From outside —
+a phone on mobile data, Home Assistant behind your reverse proxy — it cannot:
+go2rtc announces the LAN address, plus whatever public address and *random
+port* your router mapped for its STUN lookup, and that mapping is good for the
+STUN server only. WebRTC then fails, the card falls back to a mode without
+WebRTC, and anything that needs it is gone: the doorbell's G.711 audio (which
+only WebRTC can play), two-way talk, sub-second latency. Video alone still
+works, which is what makes this look like "sound is broken off Wi-Fi".
+
+Two steps fix it. Forward the host port you mapped for `8555/udp` and
+`8555/tcp` on your router to the Home Assistant host (say 8565 → 8565). Then
+announce it:
+
+```yaml
+go2rtc_webrtc_candidates:
+  - "stun:8565"             # dynamic public address: ask STUN, use this port
+  # - "home.example.org:8565"  # or a name / static address
+```
+
+The LAN address stays first in the list, so viewers at home keep the direct
+route. The option takes go2rtc's own candidate syntax verbatim.
 
 ## Provisioning over Bluetooth
 

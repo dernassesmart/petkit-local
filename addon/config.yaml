@@ -1,6 +1,6 @@
 name: "PetKit Local"
 description: "Local cloud replacement for PetKit litter boxes, feeders, fountains and accessories"
-version: "2.1.19"
+version: "2.1.20"
 slug: "petkitlocal"
 url: "https://github.com/dernassesmart/petkit-local"
 # Pull a published image rather than building on the user's machine. One
@@ -104,6 +104,12 @@ options:
   #       - "doorbird://user:pass@192.168.1.23?media=audio"
   #       - "doorbird://user:pass@192.168.1.23"
   go2rtc_extra_streams: []
+  # WebRTC candidates announced after the LAN one, in go2rtc's syntax -- what
+  # makes live audio and talk work from OUTSIDE your LAN (phone on LTE through
+  # your reverse proxy). Forward the host port you mapped for 8555/udp+tcp on
+  # your router to this host, then announce it: "stun:<that port>" for a
+  # dynamic public address, or "home.example.org:<port>" / "<ip>:<port>".
+  go2rtc_webrtc_candidates: []
   # NOTE: proxy mode and payload capture are deliberately NOT options here.
   # Both are debugging switches you flip while watching a device, so they live
   # in the panel's Setup -> Settings and persist to
@@ -125,5 +131,7 @@ schema:
     - name: str
       sources:
         - str
+  go2rtc_webrtc_candidates:
+    - str
 startup: application
 boot: auto

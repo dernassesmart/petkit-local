@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.20 — 2026-10-07
+
+### WebRTC from outside the LAN
+
+A phone on mobile data got video but no sound: off the LAN only the random
+port the router had mapped for go2rtc's STUN lookup was announced, so WebRTC
+failed and the card fell back to a mode that cannot carry G.711 audio or the
+microphone. New option `go2rtc_webrtc_candidates`: further candidates in
+go2rtc's own syntax (`stun:8565`, `home.example.org:8565`), announced after
+the LAN one once the router forwards that port to the host. Empty, nothing
+changes.
+
 ## 2.1.19 — 2026-10-07
 
 ### Other cameras through the bundled go2rtc
