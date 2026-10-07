@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.19 — 2026-10-07
+
+### Other cameras through the bundled go2rtc
+
+The WebRTC Camera integration talks to exactly one go2rtc, and once that is
+this add-on's, every other camera that wants a microphone button on a
+Home Assistant card has to come through here too. The new
+`go2rtc_extra_streams` option takes a list of `{name, sources}` entries and
+writes them into go2rtc's config verbatim -- the case in hand is a DoorBird,
+whose two-way audio go2rtc has spoken natively since 1.9.8 (the image ships
+1.9.14). go2rtc now runs for these streams even with no PetKit camera
+confirmed; a malformed entry is logged and dropped rather than taking the
+add-on down.
+
 ## 2.1.18 — 2026-10-06
 
 ### WebRTC ports are opt-in

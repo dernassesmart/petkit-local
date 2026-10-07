@@ -14,7 +14,7 @@ import json
 import logging
 import os
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -151,6 +151,42 @@ def _supervisor_port_map() -> dict[str, Any]:
     return network if isinstance(network, dict) else {}
 
 
+def parse_extra_streams(raw: Any) -> dict[str, list[str]]:
+    """`go2rtc_extra_streams` from options.json as `{name: [source, ...]}`.
+
+    The option is a list of `{name, sources}` entries (that is the shape the
+    Supervisor's schema can express and its editor can render). Like every
+    other option this never raises: an entry without a name or without a
+    single usable source is logged and dropped, because a typo in a doorbell
+    URL must not keep the add-on from serving the feeders.
+    """
+    out: dict[str, list[str]] = {}
+    if not raw:
+        return out
+    if not isinstance(raw, list):
+        log.warning("Option go2rtc_extra_streams is not a list; ignoring it")
+        return out
+    for entry in raw:
+        if not isinstance(entry, dict):
+            log.warning("go2rtc_extra_streams: ignoring non-object entry %r", entry)
+            continue
+        name = str(entry.get("name") or "").strip()
+        sources_raw = entry.get("sources")
+        if isinstance(sources_raw, str):
+            sources_raw = [sources_raw]
+        sources = [str(s).strip() for s in (sources_raw or []) if str(s).strip()]
+        if not name or not sources:
+            log.warning("go2rtc_extra_streams: entry needs a name and at least one "
+                        "source, ignoring %r", entry)
+            continue
+        if name in out:
+            log.warning("go2rtc_extra_streams: duplicate stream name %r, keeping the "
+                        "first", name)
+            continue
+        out[name] = sources
+    return out
+
+
 def _published_port(ports: dict[str, Any], container_port: int) -> int | None:
     """The host port `container_port` is published on, or None if it is not.
 
@@ -276,6 +312,12 @@ class Config:
     #: API can register `exec:` sources, which is a shell on the host.
     go2rtc_api_password: str = ""
     go2rtc_api_published: bool = False
+    #: Streams the bundled go2rtc serves BESIDES the PetKit cameras, as
+    #: `{stream name: [source url, ...]}` -- a doorbell, say, whose two-way
+    #: audio the WebRTC Camera integration can then drive through the same
+    #: published API. Rendered verbatim into go2rtc's config: every source
+    #: syntax go2rtc knows is allowed, and the add-on makes nothing of them.
+    go2rtc_extra_streams: dict[str, list[str]] = field(default_factory=dict)
 
     bucket_port: int = 9000
     #: Where the device is told to upload its photos and video. Empty means
@@ -519,6 +561,7 @@ class Config:
                         "exec: sources and is never exposed without a password",
                         GO2RTC_API_PORT)
         c.go2rtc_api_published = api_mapped and bool(c.go2rtc_api_password)
+        c.go2rtc_extra_streams = parse_extra_streams(opts.get("go2rtc_extra_streams"))
 
         api_opt = (opts.get("api_url") or "").strip()
         if not api_opt or ".local" in api_opt:

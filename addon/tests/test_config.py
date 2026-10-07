@@ -334,3 +334,32 @@ def test_the_go2rtc_api_goes_public_only_with_a_mapping_and_a_password():
     assert not c.go2rtc_api_published, "not mapped: nothing to publish on"
     c = _from_ha_addon_with({}, host_ip="192.168.1.5", ports={"1984/tcp": 1984})
     assert not c.go2rtc_api_published, "mapped without a password stays on loopback"
+
+
+# --- go2rtc_extra_streams ---------------------------------------------------
+
+def test_extra_streams_are_read_as_name_to_sources():
+    c = _from_ha_addon_with({"go2rtc_extra_streams": [
+        {"name": "doorbird", "sources": ["rtsp://u:p@h:8557/x", " doorbird://u:p@h "]},
+    ]}, host_ip="192.168.1.5")
+    assert c.go2rtc_extra_streams == {"doorbird": ["rtsp://u:p@h:8557/x", "doorbird://u:p@h"]}
+
+
+def test_extra_streams_default_to_nothing():
+    assert _from_ha_addon_with({}, host_ip="192.168.1.5").go2rtc_extra_streams == {}
+    assert _from_ha_addon_with({"go2rtc_extra_streams": []}).go2rtc_extra_streams == {}
+
+
+def test_a_broken_extra_stream_entry_is_dropped_not_fatal():
+    """A typo in a doorbell URL must not keep the add-on from serving the
+    feeders, so every bad shape degrades to 'that entry is not there'."""
+    c = _from_ha_addon_with({"go2rtc_extra_streams": [
+        {"name": "", "sources": ["rtsp://x"]},          # no name
+        {"name": "empty", "sources": []},               # no source
+        {"name": "blank", "sources": ["", "  "]},       # only blank sources
+        "not-an-object",
+        {"name": "ok", "sources": "rtsp://single"},     # a bare string is one source
+        {"name": "ok", "sources": ["rtsp://dup"]},      # duplicate name: first wins
+    ]})
+    assert c.go2rtc_extra_streams == {"ok": ["rtsp://single"]}
+    assert _from_ha_addon_with({"go2rtc_extra_streams": "nope"}).go2rtc_extra_streams == {}

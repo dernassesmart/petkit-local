@@ -1,6 +1,6 @@
 name: "PetKit Local"
 description: "Local cloud replacement for PetKit litter boxes, feeders, fountains and accessories"
-version: "2.1.18"
+version: "2.1.19"
 slug: "petkitlocal"
 url: "https://github.com/dernassesmart/petkit-local"
 # Pull a published image rather than building on the user's machine. One
@@ -95,6 +95,15 @@ options:
   # go2rtc's HTTP API on the host, for the WebRTC Camera integration (HACS):
   # map 1984/tcp in Network as well. Empty keeps the API on loopback.
   go2rtc_api_password: ""
+  # Streams the bundled go2rtc serves besides the PetKit cameras, e.g. a
+  # doorbell whose two-way audio go2rtc speaks natively. Each entry is a stream
+  # name and its go2rtc sources (any syntax go2rtc accepts), rendered verbatim:
+  #   - name: doorbird
+  #     sources:
+  #       - "rtsp://user:pass@192.168.1.23:8557/mpeg/720p/media.amp"
+  #       - "doorbird://user:pass@192.168.1.23?media=audio"
+  #       - "doorbird://user:pass@192.168.1.23"
+  go2rtc_extra_streams: []
   # NOTE: proxy mode and payload capture are deliberately NOT options here.
   # Both are debugging switches you flip while watching a device, so they live
   # in the panel's Setup -> Settings and persist to
@@ -112,5 +121,9 @@ schema:
   mqtt_tls_port: port
   mqtt_strict_auth: bool
   go2rtc_api_password: password?
+  go2rtc_extra_streams:
+    - name: str
+      sources:
+        - str
 startup: application
 boot: auto

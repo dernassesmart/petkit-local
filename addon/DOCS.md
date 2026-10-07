@@ -46,6 +46,8 @@ PetKit device ──HTTP───► petkit-local ──MQTT discovery──► 
 | `mqtt_tls` | `true` | Add a TLS listener to the device-facing broker (self-signed, generated on first start). |
 | `mqtt_tls_port` | `443` | Port for that listener. Change this and the matching port mapping together if your device dials a different one. |
 | `mqtt_strict_auth` | `false` | Enforce the Aliyun HMAC signature. Off by default so a signature nuance cannot lock a device out. |
+| `go2rtc_api_password` | *(empty)* | Publishes the bundled go2rtc's HTTP API on `1984/tcp` (map that port too) behind basic auth, user `petkit`, for the **WebRTC Camera** integration (HACS). Empty keeps the API inside the container. |
+| `go2rtc_extra_streams` | `[]` | Streams the bundled go2rtc serves besides the PetKit cameras — see [Other cameras through the same go2rtc](#other-cameras-through-the-same-go2rtc). |
 
 Payload capture and proxy mode are **not** options here. Both are things you turn on
 while watching a device, so they live in the panel's **Setup → Settings**, take
@@ -146,6 +148,31 @@ Two things worth knowing:
 There is no snapshot URL: the device answers every path with the same video
 stream, so the MQTT camera entity stays empty and the sensor carries the URL
 instead.
+
+### Other cameras through the same go2rtc
+
+Once the go2rtc API is published for the WebRTC Camera integration, that
+integration can only talk to one go2rtc — so anything else you want a
+microphone button for has to be served by this one. `go2rtc_extra_streams`
+does that: each entry is a stream name and its go2rtc sources, written into
+go2rtc's config exactly as given (every source syntax go2rtc accepts works,
+see its documentation). A DoorBird, whose two-way audio go2rtc speaks natively:
+
+```yaml
+go2rtc_extra_streams:
+  - name: doorbird
+    sources:
+      - "rtsp://user:pass@192.168.1.23:8557/mpeg/720p/media.amp"
+      - "doorbird://user:pass@192.168.1.23?media=audio"
+      - "doorbird://user:pass@192.168.1.23"
+```
+
+Then `url: doorbird` on a `custom:webrtc-camera` card with
+`media: video,audio,microphone`. The DoorBird user needs the *Watch always*
+and *API operator* permissions. An entry without a name or a source is logged
+and skipped, and go2rtc runs for these streams even when no PetKit camera is
+patched. Nothing is added to them — no audio transcode, no backchannel — so
+a source has to bring its own.
 
 ## Provisioning over Bluetooth
 

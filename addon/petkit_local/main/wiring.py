@@ -195,7 +195,8 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
                     on_change=partial(_republish_camera_state, ha_publisher, registry),
                     host_candidate=config.webrtc_candidate,
                     api_password=config.go2rtc_api_password,
-                    api_public=config.go2rtc_api_published)
+                    api_public=config.go2rtc_api_published,
+                    extra_streams=config.go2rtc_extra_streams)
     # `--no-ha` leaves the publisher as None, and that is a supported way to run
     # this — the local cloud and the panel work with no Home Assistant at all.
     if ha_publisher is not None:

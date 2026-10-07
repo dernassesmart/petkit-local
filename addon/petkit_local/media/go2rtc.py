@@ -235,7 +235,8 @@ async def probe_stream(ip: str, timeout: float = PROBE_TIMEOUT) -> bool:
 def render_config(streams: dict[str, str], log_path: str,
                   webrtc_candidate: str = "",
                   backchannels: dict[str, str] | None = None,
-                  api_password: str = "", api_public: bool = False) -> str:
+                  api_password: str = "", api_public: bool = False,
+                  extra_streams: dict[str, list[str]] | None = None) -> str:
     """The go2rtc YAML for `streams`, as `{name: source url}`.
 
     Hand-rendered rather than via PyYAML: it is a fixed short document with one
@@ -258,6 +259,13 @@ def render_config(streams: dict[str, str], log_path: str,
     auth (`local_auth` stays off), so the panel's proxy keeps working as is.
     Without a password the API stays on loopback whatever `api_public` says:
     it can register `exec:` sources, which is a shell on the host.
+
+    `extra_streams` (`{name: [source, ...]}`, the `go2rtc_extra_streams`
+    option) are rendered after the device streams exactly as given: no Opus
+    transcode and no backchannel are added, because the add-on knows nothing
+    about what is behind them -- a doorbell's own `doorbird://` source already
+    carries its two-way audio. A name that collides with a device stream is
+    skipped: the device's stream is the one the panel and the sensor point at.
     """
     if webrtc_candidate:
         cand = webrtc_candidate if ":" in webrtc_candidate else f"{webrtc_candidate}:{WEBRTC_PORT}"
@@ -311,7 +319,19 @@ def render_config(streams: dict[str, str], log_path: str,
             # JSON is valid YAML for a one-line string, and the exec line has
             # spaces, colons and a `#` that YAML would otherwise read into.
             lines.append(f"    - {json.dumps(backchannel_source(sink_ip))}")
-    if not streams:
+    rendered_extra = 0
+    for name, sources in sorted((extra_streams or {}).items()):
+        if name in streams:
+            log.warning("go2rtc: extra stream %r collides with a device stream, "
+                        "skipping it", name)
+            continue
+        # JSON-quoted on both sides: a source URL carries `#`, `:` and `@`,
+        # and a name is the user's to choose.
+        lines.append(f"  {json.dumps(name)}:")
+        for source in sources:
+            lines.append(f"    - {json.dumps(source)}")
+        rendered_extra += 1
+    if not streams and not rendered_extra:
         lines.append("  {}")
     return "\n".join(lines) + "\n"
 
@@ -335,7 +355,8 @@ class Go2rtc:
 
     def __init__(self, registry: DeviceRegistry, *, data_dir: str,
                  on_change: Any | None = None, host_candidate: str = "",
-                 api_password: str = "", api_public: bool = False) -> None:
+                 api_password: str = "", api_public: bool = False,
+                 extra_streams: dict[str, list[str]] | None = None) -> None:
         """
         Args:
             on_change: Awaited after the child starts or stops, so whatever
@@ -352,6 +373,9 @@ class Go2rtc:
         self._host_candidate = host_candidate
         self._api_password = api_password
         self._api_public = api_public
+        #: `go2rtc_extra_streams`: served whenever go2rtc runs, and reason
+        #: enough to run it with no PetKit camera at all (see `wanted`).
+        self._extra_streams = dict(extra_streams or {})
         self._config_path = os.path.join(data_dir, "go2rtc.yaml")
         self._log_path = os.path.join(data_dir, "go2rtc.log")
         self._proc: asyncio.subprocess.Process | None = None
@@ -401,8 +425,9 @@ class Go2rtc:
         return out
 
     def wanted(self) -> bool:
-        """Whether go2rtc should be running: it exists and has a camera to serve."""
-        return have_go2rtc() and bool(self.desired_streams())
+        """Whether go2rtc should be running: it exists and has something to
+        serve -- a confirmed PetKit camera, or a stream the owner configured."""
+        return have_go2rtc() and bool(self.desired_streams() or self._extra_streams)
 
     async def _watched_streams(self) -> set[str]:
         """Stream names go2rtc currently has a viewer on.
@@ -489,9 +514,11 @@ class Go2rtc:
 
         streams = self.desired_streams()
         # WebRTC candidate: our own LAN address, found by probing the route
-        # toward a camera (see lan_ip). Any device IP does — they share the LAN.
+        # toward a camera (see lan_ip). Any device IP does — they share the LAN,
+        # and so does whatever an extra stream points at.
         device_ip = ""
-        for url in streams.values():
+        for url in [*streams.values(),
+                    *(s for srcs in self._extra_streams.values() for s in srcs)]:
             device_ip = urlparse(url).hostname or ""
             if device_ip:
                 break
@@ -502,7 +529,8 @@ class Go2rtc:
                                webrtc_candidate=lan_ip(device_ip) or self._host_candidate,
                                backchannels=self.desired_backchannels(),
                                api_password=self._api_password,
-                               api_public=self._api_public)
+                               api_public=self._api_public,
+                               extra_streams=self._extra_streams)
         if self.running and config == self._rendered:
             return
 
@@ -536,7 +564,8 @@ class Go2rtc:
             self._proc = None
             return
         log.info("go2rtc serving %d stream(s) on RTSP :%d (pid %d)",
-                 len(self.desired_streams()), RTSP_PORT, self._proc.pid)
+                 len(self.desired_streams()) + len(self._extra_streams),
+                 RTSP_PORT, self._proc.pid)
         await self._notify()
 
     async def stop(self) -> None:

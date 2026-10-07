@@ -376,3 +376,79 @@ def test_the_api_is_published_only_with_a_password():
                                           "username": g.API_USERNAME, "password": "s3cret"}
     out = g.render_config({}, "/data/go2rtc.log", api_password="", api_public=True)
     assert yaml.safe_load(out)["api"] == {"listen": g.API_ADDR}
+
+
+# --- extra streams (`go2rtc_extra_streams`) ---------------------------------
+
+DOORBELL = {"doorbird": ["rtsp://u:p@192.0.2.9:8557/mpeg/720p/media.amp",
+                         "doorbird://u:p@192.0.2.9?media=audio",
+                         "doorbird://u:p@192.0.2.9"]}
+
+
+def test_extra_streams_are_rendered_verbatim_after_the_device_streams():
+    """No Opus transcode and no backchannel: the add-on knows nothing about
+    what is behind an extra stream, and a doorbird:// source carries its own
+    two-way audio."""
+    import yaml
+    out = g.render_config({"1": "http://d/main.flv?audio=1"}, "/data/go2rtc.log",
+                          extra_streams=DOORBELL)
+    doc = yaml.safe_load(out)
+    streams = {str(k): v for k, v in doc["streams"].items()}
+    assert streams["doorbird"] == DOORBELL["doorbird"]
+    assert streams["1"] == ["http://d/main.flv?audio=1", "ffmpeg:1#audio=opus"]
+
+
+def test_extra_streams_alone_render_a_real_stream_section():
+    import yaml
+    out = g.render_config({}, "/data/go2rtc.log", extra_streams=DOORBELL)
+    assert "streams:\n  {}" not in out
+    assert yaml.safe_load(out)["streams"] == DOORBELL
+
+
+def test_an_extra_stream_never_shadows_a_device_stream():
+    """The device's stream is the one the panel and the sensor point at."""
+    import yaml
+    out = g.render_config({"1": "http://d/main.flv?audio=1"}, "/data/go2rtc.log",
+                          extra_streams={"1": ["rtsp://elsewhere/"]})
+    streams = {str(k): v for k, v in yaml.safe_load(out)["streams"].items()}
+    assert streams["1"][0] == "http://d/main.flv?audio=1"
+
+
+def test_a_source_with_yaml_hostile_characters_survives_the_round_trip():
+    import yaml
+    src = "exec:ffmpeg -i x#backchannel=1#audio=pcma/8000"
+    out = g.render_config({}, "/data/go2rtc.log",
+                          extra_streams={"odd name: yes": [src]})
+    assert yaml.safe_load(out)["streams"]["odd name: yes"] == [src]
+
+
+def test_extra_streams_are_reason_enough_to_run_go2rtc(tmp_path):
+    """A doorbell is served even when no PetKit camera is confirmed."""
+    s = g.Go2rtc(_registry(), data_dir=str(tmp_path), extra_streams=DOORBELL)
+    assert s.wanted() is True
+    assert g.Go2rtc(_registry(), data_dir=str(tmp_path)).wanted() is False
+
+
+async def test_reconcile_renders_the_extra_streams_and_finds_a_candidate_through_them(tmp_path, monkeypatch):
+    """With no device stream, the extra stream's host is what `lan_ip` is
+    probed toward -- any LAN address does."""
+    import yaml
+    probed = []
+
+    def fake_lan_ip(toward):
+        probed.append(toward)
+        return ""
+
+    monkeypatch.setattr(g, "lan_ip", fake_lan_ip)
+    s = g.Go2rtc(_registry(), data_dir=str(tmp_path), host_candidate="192.168.1.5:8565",
+                 extra_streams=DOORBELL)
+
+    async def no_start():
+        pass
+
+    monkeypatch.setattr(s, "_start", no_start)
+    await s.reconcile()
+    doc = yaml.safe_load(s._rendered)
+    assert doc["streams"] == DOORBELL
+    assert doc["webrtc"]["candidates"][0] == "192.168.1.5:8565"
+    assert probed == ["192.0.2.9"]
