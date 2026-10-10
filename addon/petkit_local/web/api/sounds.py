@@ -14,7 +14,6 @@ on the bucket port.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -24,6 +23,7 @@ from typing import Any
 from aiohttp import web
 
 from petkit_local.ha.commands import make_mqtt_property_set, _envelope
+from petkit_local.media.sounds import TranscodeError, describe, transcode_to_adts
 from petkit_local.web.api._common import _device_or_404, _deliver, _refuse
 
 log = logging.getLogger(__name__)
@@ -33,8 +33,26 @@ MAX_SOUNDS_PER_DEVICE = 10
 
 
 def _sounds_dir(request: web.Request, device_id: int) -> str:
-    data_dir = request.app["cfg"].get("data_dir", "/data")
+    # The panel keeps the add-on config under "cfg", the device-facing API
+    # under "config" -- and `dev_sound_get` (handlers/stubs.py) runs on the
+    # latter. Reading "cfg" alone raised KeyError there, the never-fail
+    # middleware answered the device an empty list, and no uploaded sound ever
+    # reached a device.
+    cfg = request.app.get("cfg") or request.app.get("config") or {}
+    data_dir = cfg.get("data_dir", "/data") if hasattr(cfg, "get") else "/data"
     return os.path.join(data_dir, "sounds", str(device_id))
+
+
+def _hub_and_bridge(request: web.Request) -> tuple[Any, Any]:
+    """The event hub and the MQTT bridge, whichever app this runs on.
+
+    The panel registers its hub as "hub" (`web/appkeys.py::HUB`); "event_hub"
+    is the device-facing server's name for it. Play and Select run on the
+    panel and looked only for the latter, so every click answered 400
+    "no event hub".
+    """
+    app = request.app
+    return (app.get("hub") or app.get("event_hub")), app.get("bridge")
 
 
 def _sounds_meta_path(request: web.Request, device_id: int) -> str:
@@ -83,6 +101,9 @@ def sound_list_for_device(request: web.Request, device_id: int,
             "url": f"{base}/sounds/{device_id}/{s['filename']}",
             "digest": s.get("digest", ""),
             "size": s.get("size", 0),
+            # Read by the firmware alongside digest and duration (`ctrl`
+            # strings); milliseconds, as PetKit's own timestamps are.
+            "gmtCreate": int(s.get("uploaded_at", 0)) * 1000,
         })
     return result
 
@@ -113,22 +134,29 @@ async def api_sounds_upload(request: web.Request) -> web.Response:
         raise _refuse(web.HTTPBadRequest, "empty file")
 
     sound_id = _next_id(sounds)
-    digest = hashlib.md5(data).hexdigest()
-    filename = f"sound_{sound_id}{ext}"
-
     d_dir = _sounds_dir(request, d.petkit_id)
     os.makedirs(d_dir, exist_ok=True)
+
+    # The device keeps a download as `/opt/user_feed_over_<id>.aac` and plays
+    # it through the ADTS parser its own prompts use, whatever the upload
+    # was -- an .m4a from a phone went down fine and never made a sound. So
+    # every upload becomes ADTS AAC-LC 16 kHz mono here (`media/sounds.py`),
+    # and the entry carries the duration the device is told.
+    try:
+        adts = await transcode_to_adts(data, workdir=d_dir)
+    except TranscodeError as e:
+        raise _refuse(web.HTTPBadRequest, f"could not convert {filename_raw}: {e}") from None
+    del ext  # the stored name is always .aac
+    filename = f"sound_{sound_id}.aac"
     filepath = os.path.join(d_dir, filename)
     with open(filepath, "wb") as f:
-        f.write(data)
+        f.write(adts)
 
     entry: dict[str, Any] = {
         "id": sound_id,
         "name": os.path.splitext(filename_raw)[0],
         "filename": filename,
-        "size": len(data),
-        "digest": digest,
-        "duration": 0,
+        **describe(adts),
         "uploaded_at": int(time.time()),
     }
     sounds.append(entry)
@@ -137,14 +165,13 @@ async def api_sounds_upload(request: web.Request) -> web.Response:
     bucket_endpoint = request.app["cfg"].get("bucket_endpoint", "")
     if bucket_endpoint:
         sound_list = sound_list_for_device(request, d.petkit_id, bucket_endpoint)
-        hub = request.app.get("event_hub")
-        bridge = request.app.get("bridge")
+        hub, bridge = _hub_and_bridge(request)
         if hub and bridge:
             envelope = make_mqtt_property_set({"soundList": sound_list})
             await _deliver(hub, bridge, d, "property/set", envelope)
 
-    log.info("Uploaded sound %d for device %d: %s (%d bytes)",
-             sound_id, d.petkit_id, filename, len(data))
+    log.info("Uploaded sound %d for device %d: %s (%d bytes in, %d bytes ADTS, %d s)",
+             sound_id, d.petkit_id, filename, len(data), entry["size"], entry["duration"])
     return web.json_response({"ok": True, "sound": entry})
 
 
@@ -178,8 +205,7 @@ async def api_sounds_play(request: web.Request) -> web.Response:
     except (ValueError, KeyError):
         raise _refuse(web.HTTPBadRequest, "bad sound_id") from None
 
-    hub = request.app.get("event_hub")
-    bridge = request.app.get("bridge")
+    hub, bridge = _hub_and_bridge(request)
     if not hub:
         raise _refuse(web.HTTPBadRequest, "no event hub")
 
@@ -196,8 +222,7 @@ async def api_sounds_select(request: web.Request) -> web.Response:
 
     d.config.setdefault("settings", {})["selectedSound"] = sound_id
 
-    hub = request.app.get("event_hub")
-    bridge = request.app.get("bridge")
+    hub, bridge = _hub_and_bridge(request)
     if not hub:
         raise _refuse(web.HTTPBadRequest, "no event hub")
 

@@ -8,6 +8,7 @@ cancelled at all, which is the whole reason `_spawn` exists.
 from __future__ import annotations
 
 import asyncio
+from petkit_local.media.sounds import migrate_sounds
 import logging
 import os
 import ssl
@@ -120,6 +121,12 @@ async def start_background(services: Services, app_instance: web.Application) ->
     # started in their constructors); this hands them the running loop so
     # `mark_dirty()` coalesces writes instead of fsyncing per message.
     await registry.start()
+    # Sounds uploaded before 2.1.21 were stored as received; the device
+    # can only play ADTS AAC, so they are converted once here.
+    try:
+        await migrate_sounds(config.data_dir)
+    except Exception as e:  # noqa: BLE001 - a bad file must not stop the start
+        log.warning("Sound migration skipped: %s", e)
     await ble_registry.start()
 
     # Web panel, over HTTP only, and deliberately not served a SECOND time on

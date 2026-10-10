@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.1.21 — 2026-10-10
+
+### Custom feeding sounds reach the feeder, and play
+
+An uploaded sound never played on a YumShare Dual-Hopper 2, for three
+reasons, two of them this add-on's. `dev_sound_get`, the device's poll for
+its sound list, raised on every call (the sounds helper read the panel's
+config key on the device-facing server) and the never-fail middleware
+answered an empty list, so the device was never told a sound existed. The
+panel's Play and Select buttons looked for the event hub under the other
+server's key and answered 400 "no event hub", so the selection never reached
+the device either. And the file was stored as uploaded: the firmware keeps a
+download as `user_feed_over_<id>.aac` and plays it through the same ADTS
+parser as its own prompts, which are ADTS AAC-LC 16 kHz mono -- a phone's
+.m4a goes down fine and makes no sound.
+
+Every upload is now transcoded to that format (ffmpeg is in the image), the
+list carries the real duration and the `gmtCreate` the firmware reads, and
+sounds uploaded before this release are converted once at startup. Press
+Select on a sound to make it the feeding sound; the device re-downloads on
+selection and plays it at the end of each feeding while "Feeding sound" is
+on. Play is the test button.
+
 ## 2.1.20 — 2026-10-07
 
 ### WebRTC from outside the LAN
