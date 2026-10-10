@@ -72,8 +72,31 @@ async def test_the_device_is_told_about_its_sounds(tmp_path):
     assert r.status == 200
     # Plain HTTP on the API host -- the bucket's HTTPS is beyond the device's wget.
     assert body["result"][0]["url"] == "http://server/sounds/100/sound_1.aac"
-    assert body["result"][0]["gmtCreate"] == 1700000000 * 1000
+    # a STRING: the firmware strcmp()s it without a type check and segfaults on a number
+    assert body["result"][0]["gmtCreate"] == "1700000000000"
     assert set(body["result"][0]) >= {"id", "name", "duration", "url", "digest", "size"}
+
+
+async def test_the_list_never_exceeds_the_firmwares_five_slots(tmp_path):
+    d = tmp_path / "sounds" / "100"
+    d.mkdir(parents=True)
+    rows = []
+    for i in range(1, 8):
+        (d / f"sound_{i}.aac").write_bytes(_adts(frames=2))
+        rows.append({"id": i, "name": f"s{i}", "filename": f"sound_{i}.aac", "size": 1,
+                     "digest": "x", "duration": 1, "uploaded_at": 1700000000 + i})
+    (d / "sounds.json").write_text(json.dumps(rows))
+    reg = DeviceRegistry()
+    app = create_app(reg, {"api_url": "http://server/6/", "mqtt_port": 1883, "proxy_mode": False,
+                           "proxy_upstream": "", "proxy_block_run_cmd": True, "data_dir": str(tmp_path)})
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        await client.post("/6/d4sh/dev_signup", headers=HDR)
+        body = await (await client.get("/6/d4sh/dev_sound_get", headers=HDR)).json()
+    finally:
+        await client.close()
+    assert len(body["result"]) == 5
 
 
 async def test_the_api_port_serves_the_sound_file(tmp_path):
@@ -137,6 +160,7 @@ async def test_an_upload_is_stored_as_adts_with_its_duration(tmp_path, monkeypat
         await client.close()
     assert r.status == 200, body
     assert body["sound"]["filename"] == "sound_1.aac"
+    assert not reg._devices[100].command_queue, "no soundList push: the device fetches on select"
     assert body["sound"]["duration"] == 3
     assert body["sound"]["name"] == "Futtifutti"
     stored = (tmp_path / "sounds" / "100" / "sound_1.aac").read_bytes()

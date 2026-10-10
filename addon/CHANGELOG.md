@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.1.23 — 2026-10-10
+
+### The sound list no longer crashes the feeder
+
+2.1.21 and 2.1.22 were not enough, and the reason was 2.1.21's own doing.
+The YumShare Dual-Hopper 2 went silent the moment it parsed a non-empty
+sound list, made no download attempt, and its watchdog restarted `ctrl`
+every ~58 s (and, once, the whole device) until the list was empty again.
+Read out of the firmware: it takes the `gmtCreate` field of each entry as a
+string and hands the pointer to strcmp without a check; 2.1.21 had added that
+field as a number, for which cJSON leaves the string pointer NULL. One
+segfault per list, no signal handler, no log line.
+
+`gmtCreate` is a string now. The list is also capped at five entries, the
+size of the fixed array the firmware copies it into without a bounds check,
+and the `property.set{soundList}` push after an upload is gone: it was not
+something PetKit's cloud sends, the firmware parses it with the same
+unchecked reads, and the device fetches the list itself when a sound is
+selected.
+
 ## 2.1.22 — 2026-10-10
 
 ### Sounds are served over plain HTTP, because the feeder's wget cannot do TLS

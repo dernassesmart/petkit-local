@@ -30,7 +30,11 @@ from petkit_local.web.api._common import _device_or_404, _deliver, _refuse
 log = logging.getLogger(__name__)
 
 MAX_SOUND_SIZE = 2 * 1024 * 1024  # 2 MB
-MAX_SOUNDS_PER_DEVICE = 10
+#: The firmware keeps the list in a fixed array of FIVE entries
+#: (`g_sound_list`, 5 x 208 bytes in the YumShare `ctrl`) and does not clamp
+#: the array size it is sent, so a sixth entry would overwrite whatever
+#: follows in memory.
+MAX_SOUNDS_PER_DEVICE = 5
 
 
 def _sounds_dir(request: web.Request, device_id: int) -> str:
@@ -107,7 +111,7 @@ def sound_list_for_device(request: web.Request, device_id: int,
         return []
     base = base_url.rstrip("/")
     result = []
-    for s in sounds:
+    for s in sounds[:MAX_SOUNDS_PER_DEVICE]:
         result.append({
             "id": s["id"],
             "name": s.get("name", ""),
@@ -115,9 +119,15 @@ def sound_list_for_device(request: web.Request, device_id: int,
             "url": f"{base}/sounds/{device_id}/{s['filename']}",
             "digest": s.get("digest", ""),
             "size": s.get("size", 0),
-            # Read by the firmware alongside digest and duration (`ctrl`
-            # strings); milliseconds, as PetKit's own timestamps are.
-            "gmtCreate": int(s.get("uploaded_at", 0)) * 1000,
+            # A STRING, and the only field whose type is not obvious: the
+            # firmware reads `gmtCreate` with cJSON's `valuestring` and hands
+            # it to strcmp without a check (ctrl 0x23764, YumShare fw 895).
+            # Sent as a number -- which 2.1.21 did -- that pointer is NULL,
+            # ctrl segfaults the moment it parses a non-empty list, and the
+            # watchdog restarts it every ~58 s for as long as the list stays
+            # non-empty. `id`, `size`, `duration` are read as numbers; `url`
+            # and `digest` as strings; `name` is not read at all.
+            "gmtCreate": str(int(s.get("uploaded_at", 0)) * 1000),
         })
     return result
 
@@ -176,13 +186,12 @@ async def api_sounds_upload(request: web.Request) -> web.Response:
     sounds.append(entry)
     _save_sounds(request, d.petkit_id, sounds)
 
-    base_url = sound_download_base(request.app["cfg"], request.host)
-    if base_url:
-        sound_list = sound_list_for_device(request, d.petkit_id, base_url)
-        hub, bridge = _hub_and_bridge(request)
-        if hub and bridge:
-            envelope = make_mqtt_property_set({"soundList": sound_list})
-            await _deliver(hub, bridge, d, "property/set", envelope)
+    # No `property.set{soundList}` push here any more. It was this add-on's
+    # invention, not something the cloud sends, and the firmware's handler
+    # for that key parses the entries with the same unchecked field reads as
+    # `dev_sound_get` -- one more way to crash ctrl for no gain: the device
+    # fetches the list itself at boot, on a poll, and the moment a sound is
+    # selected ("select sound file_id, re-download"). Select is the trigger.
 
     log.info("Uploaded sound %d for device %d: %s (%d bytes in, %d bytes ADTS, %d s)",
              sound_id, d.petkit_id, filename, len(data), entry["size"], entry["duration"])
