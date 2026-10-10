@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.22 — 2026-10-10
+
+### Sounds are served over plain HTTP, because the feeder's wget cannot do TLS
+
+With 2.1.21 the YumShare Dual-Hopper 2 finally saw its sound list -- and
+rebooted 90 seconds later, once per boot, until the list was empty again. The
+list pointed at the HTTPS bucket, and the BusyBox wget the firmware downloads
+with cannot complete a handshake with it ("got bad TLS record (len:0) while
+expecting handshake record", at once); the failed download then stalled
+`ctrl` and the watchdog restarted the device. Sounds are now fetched from the
+API port over plain HTTP, exactly like the face photos, whose download is
+proven on this firmware.
+
 ## 2.1.21 — 2026-10-10
 
 ### Custom feeding sounds reach the feeder, and play

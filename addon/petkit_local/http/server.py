@@ -48,6 +48,7 @@ from petkit_local.http.handlers.upload_log import (
     handle_upload_log_token, handle_upload_log_done,
 )
 from petkit_local.http.handlers.stubs import (
+    handle_sound_download,
     handle_sync_time,
     handle_ota_check,
     handle_oss_sts,
@@ -147,6 +148,8 @@ def create_app(registry: DeviceRegistry, config: dict) -> web.Application:
 
     app.router.add_route("*", "/patcher/download/{device_id}/{filename}", handle_patcher_download)
     app.router.add_route("*", "/faces/{filename}", handle_faces)
+    # Custom sounds for the device, over plain HTTP like the faces.
+    app.router.add_get("/sounds/{device_id}/{filename}", handle_sound_download)
     app.router.add_route("*", "/", handle_index)
     app.router.add_route("*", "/{path:.*}", handle_catchall)
 

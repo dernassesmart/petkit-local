@@ -19,6 +19,7 @@ import logging
 import os
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 from aiohttp import web
 
@@ -85,13 +86,26 @@ def _next_id(sounds: list[dict[str, Any]]) -> int:
     return max(s["id"] for s in sounds) + 1
 
 
+def sound_download_base(cfg: Any, request_host: str = "") -> str:
+    """`http://<api host>`: where a device fetches its sounds from.
+
+    The API host, not the bucket: the bucket is HTTPS, and the BusyBox wget
+    the firmware downloads with cannot complete a TLS handshake with it on
+    the Axera YumShare -- see `handlers/stubs.py::handle_sound_get` for what
+    the failed download did to the device. The face photos have always been
+    served this way and that download is proven on the same firmware.
+    """
+    host = urlparse(str(cfg.get("api_url", "") if hasattr(cfg, "get") else "")).netloc or request_host
+    return f"http://{host}" if host else ""
+
+
 def sound_list_for_device(request: web.Request, device_id: int,
-                          bucket_endpoint: str) -> list[dict[str, Any]]:
-    """Build the ``dev_sound_get`` result list with download URLs."""
+                          base_url: str) -> list[dict[str, Any]]:
+    """Build the ``dev_sound_get`` result list with download URLs under `base_url`."""
     sounds = _load_sounds(request, device_id)
-    if not sounds or not bucket_endpoint:
+    if not sounds or not base_url:
         return []
-    base = bucket_endpoint.rstrip("/")
+    base = base_url.rstrip("/")
     result = []
     for s in sounds:
         result.append({
@@ -162,9 +176,9 @@ async def api_sounds_upload(request: web.Request) -> web.Response:
     sounds.append(entry)
     _save_sounds(request, d.petkit_id, sounds)
 
-    bucket_endpoint = request.app["cfg"].get("bucket_endpoint", "")
-    if bucket_endpoint:
-        sound_list = sound_list_for_device(request, d.petkit_id, bucket_endpoint)
+    base_url = sound_download_base(request.app["cfg"], request.host)
+    if base_url:
+        sound_list = sound_list_for_device(request, d.petkit_id, base_url)
         hub, bridge = _hub_and_bridge(request)
         if hub and bridge:
             envelope = make_mqtt_property_set({"soundList": sound_list})

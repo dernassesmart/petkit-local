@@ -70,9 +70,27 @@ async def test_the_device_is_told_about_its_sounds(tmp_path):
     finally:
         await client.close()
     assert r.status == 200
-    assert body["result"][0]["url"] == "https://192.0.2.1:9000/sounds/100/sound_1.aac"
+    # Plain HTTP on the API host -- the bucket's HTTPS is beyond the device's wget.
+    assert body["result"][0]["url"] == "http://server/sounds/100/sound_1.aac"
     assert body["result"][0]["gmtCreate"] == 1700000000 * 1000
     assert set(body["result"][0]) >= {"id", "name", "duration", "url", "digest", "size"}
+
+
+async def test_the_api_port_serves_the_sound_file(tmp_path):
+    _seed(tmp_path)
+    app = create_app(DeviceRegistry(), {"api_url": "http://server/6/", "mqtt_port": 1883, "proxy_mode": False,
+                                        "proxy_upstream": "", "proxy_block_run_cmd": True, "data_dir": str(tmp_path)})
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        r = await client.get("/sounds/100/sound_1.aac")
+        data = await r.read()
+        missing = await client.get("/sounds/100/nope.aac")
+        bad = await client.get("/sounds/100/..%2Fsounds.json")
+    finally:
+        await client.close()
+    assert r.status == 200 and snd.is_adts(data)
+    assert missing.status == 404 and bad.status in (400, 404)
 
 
 async def test_play_and_select_find_the_panels_hub(tmp_path):

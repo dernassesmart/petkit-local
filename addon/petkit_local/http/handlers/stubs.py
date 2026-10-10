@@ -19,9 +19,12 @@ PetKit cloud (see the CHANGELOG's "Fidelity" entry); do not simplify them to
 """
 from __future__ import annotations
 
+import os
+
 import time
 
 from aiohttp import web
+from petkit_local.utils.paths import UnsafePathError, safe_join
 
 from petkit_local.devices import payloads
 from petkit_local.devices.base import Device
@@ -35,7 +38,7 @@ from petkit_local.http.handlers._common import (
 )
 from petkit_local.media.crypto import resolve_key_string as _get_aes_key
 from petkit_local.utils.capture import capture_record
-from petkit_local.web.api.sounds import sound_list_for_device
+from petkit_local.web.api.sounds import sound_download_base, sound_list_for_device
 
 
 async def handle_sync_time(request: web.Request) -> web.Response:
@@ -253,10 +256,35 @@ async def handle_sound_get(request: web.Request) -> web.Response:
         uploaded. An ARRAY, because the firmware iterates the result.
     """
     config = request.app["config"]
-    bucket_endpoint = config.get("bucket_endpoint", "")
     device = request_device(request)
-    if device and bucket_endpoint:
-        sounds = sound_list_for_device(request, device.petkit_id, bucket_endpoint)
+    if device:
+        # Served over plain HTTP on the API port, the way the face photos are
+        # (`/faces/`), not from the HTTPS bucket. The firmware downloads with
+        # BusyBox wget, whose TLS cannot talk to the bucket at all on the Axera
+        # YumShare (fw 895: "got bad TLS record (len:0) while expecting
+        # handshake record", instantly) -- and a download that fails there
+        # does not fail gracefully: ctrl stopped feeding the watchdog and the
+        # feeder rebooted 90 s later, at every boot, until the list was empty
+        # again. The API host is one the device can reach by definition.
+        sounds = sound_list_for_device(request, device.petkit_id,
+                                       sound_download_base(config, request.host))
         if sounds:
             return web.json_response({"result": sounds})
     return web.json_response({"result": []})
+
+
+async def handle_sound_download(request: web.Request) -> web.Response:
+    """`/sounds/{device_id}/{filename}` — an uploaded sound, for the device.
+
+    The same file the bucket serves on its port; here on the API port over
+    plain HTTP, because that is the one the firmware's wget can fetch from.
+    """
+    data_dir = request.app["config"].get("data_dir", "/data")
+    try:
+        path = safe_join(safe_join(os.path.join(data_dir, "sounds"), request.match_info["device_id"]),
+                         request.match_info["filename"])
+    except UnsafePathError:
+        return web.Response(status=400, text="bad path")
+    if not os.path.isfile(path):
+        return web.Response(status=404, text="not found")
+    return web.FileResponse(path)
