@@ -18,7 +18,7 @@ from petkit_local.provision.telnet import TelnetShell
 from petkit_local.provision.telnet_flow import ProvisionError, provision_via_telnet
 
 DOC = {
-    "idInfo": {"sn": "20260629DJ0882"},
+    "idInfo": {"dev_id": 300039037, "dev_srt": "88c95978117db8d8c782140e134fdc2a"},
     "serverInfo": {"apiServers": ["https://api-eu.petkt.com/6/"], "ipServers": ["https://3.66.36.97:80/6/"],
                    "dns": "", "linked": 1},
     "app_conf": {"feedSound": 1},
@@ -67,7 +67,7 @@ class FakeShell:
         if cmd == "uname -m":
             return 0, self.arch
         if cmd.startswith("cat /opt/version"):
-            return 0, "895"
+            return 0, "70c4436485f164024a07fd9c88f21563{\n\t\"current\":\t{\n\t\t\"firmwareVer\":\t\"895\"\n\t}\n}"
         if cmd.startswith("test -f /opt/user.conf"):
             return 0, "yes" if "/opt/user.conf" in self.files else ""
         if cmd.startswith("md5sum "):
@@ -106,7 +106,8 @@ async def test_the_happy_path_writes_a_verified_file_and_keeps_backups(tmp_path)
     res = await provision_via_telnet("192.0.2.9", "root", "pw", "http://192.168.1.5/6/",
                                      data_dir=str(tmp_path), shell=sh, log=lines.append)
     assert sh.logged_in == ("root", "pw")
-    assert res["serial"] == "20260629DJ0882" and res["rebooted"] is True
+    assert res["serial"] == "300039037" and res["rebooted"] is True
+    assert any("firmware 895" in ln for ln in lines)
     assert len(res["changes"]) == 2
     new_doc = userconf.load(sh.files["/opt/user.conf"])
     assert new_doc["serverInfo"]["apiServers"] == ["http://192.168.1.5/6/"]

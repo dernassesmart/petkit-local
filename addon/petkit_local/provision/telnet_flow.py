@@ -43,6 +43,18 @@ def _md5(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
+def _firmware_version(text: str) -> str:
+    """`current.firmwareVer` out of `/opt/version`, which is a 32-hex checksum
+    followed by a JSON document; "" when it does not look like that."""
+    body = text.strip()
+    if len(body) > 32 and body[:32].isalnum() and body[32] == "{":
+        body = body[32:]
+    try:
+        return str(json.loads(body).get("current", {}).get("firmwareVer", "") or "")
+    except (ValueError, AttributeError):
+        return ""
+
+
 async def provision_via_telnet(host: str, user: str, password: str, api_url: str, *,
                                data_dir: str, reboot: bool = True,
                                shell: TelnetShell | None = None,
@@ -66,8 +78,8 @@ async def provision_via_telnet(host: str, user: str, password: str, api_url: str
         if rc != 0 or arch not in SUPPORTED_ARCH:
             raise ProvisionError(f"unsupported device: uname -m says {arch!r} "
                                  f"(this path is verified for {', '.join(sorted(SUPPORTED_ARCH))} only)")
-        rc, version = await sh.run("cat /opt/version 2>/dev/null | head -c 300")
-        say(f"device: {arch}" + (f", {version.strip()[:80]}" if version.strip() else ""))
+        rc, version = await sh.run("cat /opt/version 2>/dev/null | head -c 600")
+        say(f"device: {arch}" + (f", firmware {fw}" if (fw := _firmware_version(version)) else ""))
         rc, present = await sh.run(f"test -f {CONF_PATH} && echo yes")
         if "yes" not in present:
             raise ProvisionError(f"{CONF_PATH} not found on the device: not the layout this path knows")
@@ -81,7 +93,9 @@ async def provision_via_telnet(host: str, user: str, password: str, api_url: str
         say(f"fetched {CONF_PATH} ({len(blob)} bytes, md5 {remote_md5})")
 
         doc = userconf.load(blob)
-        serial = str((doc.get("idInfo") or {}).get("sn") or "").strip() or "unknown"
+        # `idInfo` carries the device id (`dev_id`) and its secret, not the
+        # serial; the id is what the panel shows for the device anyway.
+        serial = str((doc.get("idInfo") or {}).get("dev_id") or "").strip() or "unknown"
         backup_dir = os.path.join(data_dir, "provision", re.sub(r"[^A-Za-z0-9_.-]", "_", serial) + "-" + time.strftime("%Y%m%d-%H%M%S"))
         os.makedirs(backup_dir, exist_ok=True)
         with open(os.path.join(backup_dir, "user.conf.orig"), "wb") as f:

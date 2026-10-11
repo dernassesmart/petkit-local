@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.26 — 2026-10-11
+
+### Telnet provisioning: verified on the device, log tidied
+
+The first run against a real YumShare Dual-Hopper 2 did everything it should
+(logged in, fetched and checked the file, decrypted it, found the device
+already pointing here and stopped without writing) and took 0.3 seconds.
+Two cosmetic things from that log: the device is now named by its id (the
+file carries no serial), and the firmware version is read out of
+`/opt/version` instead of the raw file being quoted.
+
 ## 2.1.25 — 2026-10-11
 
 ### Provision a Linux device over telnet, no Bluetooth needed
