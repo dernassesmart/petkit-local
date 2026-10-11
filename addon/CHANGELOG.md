@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.25 — 2026-10-11
+
+### Provision a Linux device over telnet, no Bluetooth needed
+
+The Axera-generation YumShare Dual-Hopper 2 never answers the Provision
+tab's Bluetooth writes, but it ships with a root telnet login and keeps its
+server addresses in an encrypted `/opt/user.conf`. The Provision tab has a
+second card now: device IP, login, and the apiServers URL it shares with the
+Bluetooth form. The add-on fetches the file over the shell, checks it against
+the device's own md5sum, decrypts it (the key is the firmware's), points
+`serverInfo.apiServers` and `ipServers` here, encrypts it again, uploads it
+as `/opt/user.conf.new`, verifies the checksum on the device, keeps the
+original as `/opt/user.conf.bak` (and a copy under the add-on's data
+directory), moves the new file into place, and reboots. Any device that does
+not look like the one this was verified on (`armv7l`, that file in that
+place) is refused before anything is written.
+
+This automates the manual run of 2026-10-05 step for step.
+
 ## 2.1.24 — 2026-10-11
 
 ### Schedule editor: weekdays can be toggled again, and typing a time no longer fights the editor

@@ -159,13 +159,14 @@ function provisionWarning(hasBt, secure) {
     };
   return { card: '', tooltip: '' };
 }
-function plog(line) {
-  const el = document.getElementById('p-log');
+function plog(line, logId = 'p-log') {
+  const el = document.getElementById(logId);
   el.style.display = 'block';
   el.textContent += line + '\n';
   el.scrollTop = el.scrollHeight;
 }
 onAction('provision', () => doProvision());
+onAction('provision-telnet', () => doProvisionTelnet());
 function blufiFrame(seq, data, frag, totalLen) {
   const head = [
     BLUFI_TYPE_DATA | (BLUFI_DATA_CUSTOM << 2),
@@ -883,7 +884,57 @@ async function doProvision() {
     } catch (e) {}
   }
 }
-async function watchForDevice() {
+// The telnet path: no Bluetooth, no secure context needed -- the shell is
+// opened by the server, not the browser. The apiServers URL is the same field
+// the Bluetooth form uses, so the two paths cannot hand a device different
+// addresses. Everything the server did is shown line by line; a refusal
+// arrives as an error with the same log attached.
+async function doProvisionTelnet() {
+  const host = document.getElementById('pt-host').value.trim();
+  const user = document.getElementById('pt-user').value.trim() || 'root';
+  const password = document.getElementById('pt-pass').value;
+  const server = document.getElementById('p-server').value.trim();
+  const reboot = document.getElementById('pt-reboot').checked;
+  const st = document.getElementById('pt-status');
+  const logEl = document.getElementById('pt-log');
+  const btn = document.getElementById('pt-btn');
+  if (!host) {
+    toast('Device IP is required.');
+    return;
+  }
+  if (!password) {
+    toast('The device password is required.');
+    return;
+  }
+  logEl.style.display = 'block';
+  logEl.textContent = '';
+  btn.disabled = true;
+  st.textContent = ' working… (a few seconds)';
+  const r = await api('provision/telnet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ host, user, password, server, reboot }),
+  });
+  btn.disabled = false;
+  (r.log || []).forEach(line => {
+    logEl.textContent += line + '\n';
+  });
+  if (r.error) {
+    st.textContent = ' ✗ ' + r.error;
+    toast(r.error);
+    return;
+  }
+  if (!r.changes || !r.changes.length) {
+    st.textContent = ' already pointing here — nothing changed.';
+    return;
+  }
+  st.textContent = reboot
+    ? ' ✓ written; the device is rebooting — waiting for it to call this app…'
+    : ' ✓ written; power-cycle the device now, then it will call this app.';
+  watchForDevice('pt-status', 'pt-log');
+}
+
+async function watchForDevice(statusId = 'p-status', logId = 'p-log') {
   const before = (await api('devices')).length;
   let tries = 0;
   const iv = setInterval(async () => {
@@ -891,17 +942,18 @@ async function watchForDevice() {
     const ds = await api('devices');
     if (ds.length > before) {
       clearInterval(iv);
-      document.getElementById('p-status').textContent = ' ✓ device connected! see the Devices tab.';
-      plog('device connected: ' + ds[ds.length - 1].name + ' #' + ds[ds.length - 1].id);
+      document.getElementById(statusId).textContent = ' ✓ device connected! see the Devices tab.';
+      plog('device connected: ' + ds[ds.length - 1].name + ' #' + ds[ds.length - 1].id, logId);
     } else if (tries > 60) {
       clearInterval(iv);
-      plog('(still waiting — check the Log tab for its first HTTP call)');
+      plog('(still waiting — check the Log tab for its first HTTP call)', logId);
     }
   }, 5000);
 }
 
 export {
   loadProvision,
+  doProvisionTelnet,
   provisionWarning,
   provisionUrlWarning,
   blufiExplain,

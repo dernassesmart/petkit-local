@@ -73,6 +73,7 @@ from petkit_local.web.api.sounds import (
     api_sounds_delete, api_sounds_list, api_sounds_play,
     api_sounds_select, api_sounds_upload,
 )
+from petkit_local.web.api.provision import api_provision_telnet
 from petkit_local.web.api.stream import api_stream_proxy, api_turn
 from petkit_local.web.api.talk import api_talk
 from petkit_local.web.api.timeline import api_event_detail, api_timeline
@@ -263,6 +264,7 @@ def create_panel_app(registry: DeviceRegistry, ble_registry: BLERegistry | None,
     # --- live view: the go2rtc streaming endpoints, proxied on our origin
     # (go2rtc's API is loopback-only), plus TURN credentials for off-LAN
     # WebRTC. Every method: the WS upgrade is a GET but `api/webrtc` is POSTed.
+    app.router.add_post("/api/provision/telnet", api_provision_telnet)
     app.router.add_route("*", "/api/stream/{path:.*}", api_stream_proxy)
     app.router.add_get("/api/turn", api_turn)
 

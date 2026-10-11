@@ -68,6 +68,19 @@
         <span id="p-status" class="mut"></span></div>
       <pre id="p-log" style="display:none"></pre>
     </div>
+    <div id="provTelnet" class="card">
+      <h3>Provision a Linux device over telnet</h3>
+      <p class="sub">For the models whose Bluetooth never answers (the YumShare Dual-Hopper 2 among them) but that ship with a root shell. The device must already be on your WiFi — pair it once with the PetKit app, then point it here. Its config file is fetched, the two server entries are pointed at this app, and the file is written back under a verified checksum, with a backup left on the device (<code>/opt/user.conf.bak</code>) and in this app's data directory. Verified on a YumShare Dual-Hopper 2 (firmware 895); any other layout is refused before anything is written.</p>
+      <div class="row">
+        <div class="col"><label class="mut">Device IP<button class="help" type="button" data-action="help" data-help="The device's address on your WiFi, from your router's client list. Telnet port 23 must answer there.">?</button></label><input id="pt-host" autocomplete="off" placeholder="192.168.1.50"></div>
+        <div class="col"><label class="mut">User<button class="help" type="button" data-action="help" data-help="The shell login. root on every device seen so far.">?</button></label><input id="pt-user" value="root" autocomplete="off"></div>
+        <div class="col"><label class="mut">Password<button class="help" type="button" data-action="help" data-help="The device's root password. For the YumShare Dual-Hopper 2 it is the one localkit documents (while(&amp;P). It goes from this page to this app and then to the device, nowhere else.">?</button></label><input id="pt-pass" type="password" autocomplete="off"></div>
+      </div>
+      <label class="mut"><input type="checkbox" id="pt-reboot" checked> reboot the device afterwards (otherwise power-cycle it yourself)</label>
+      <div class="form-actions"><button id="pt-btn" class="act" data-action="provision-telnet">Provision via telnet</button>
+        <span id="pt-status" class="mut"></span></div>
+      <pre id="pt-log" style="display:none"></pre>
+    </div>
   </section>
   <section id="tab-capture" role="tabpanel" class="hidden"><div id="capView" class="card">…</div></section>
   <section id="tab-patchers" role="tabpanel" class="hidden"><div id="patchView">…</div></section>

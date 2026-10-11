@@ -172,6 +172,14 @@ expected on every ESP32 model, costs nothing, and is why the heartbeat is the co
 Purobot, YumShare and EverSweet Ultra AI enforce HTTPS and pin the cloud's CA, so for them the
 route is Bluetooth provisioning plus the **Patchers** tab, exactly as upstream documents.
 
+The **YumShare Dual-Hopper 2** (Axera, "D4SH3") is the exception: its Bluetooth never answers the
+provisioning writes, but it has a root telnet login. The Provision tab's second card, **Provision a
+Linux device over telnet**, pairs it without Bluetooth: have the device on your WiFi (the PetKit
+app pairs it), enter its IP and the root password localkit documents, and the add-on rewrites the
+server entries in its encrypted `/opt/user.conf` under a verified checksum, keeps the original as
+`/opt/user.conf.bak`, and reboots it. The device then calls this app; the **Patchers** tab takes
+it from there (camera, certificate, two-way talk).
+
 ## 🎙 Live view and two-way talk
 
 The camera models stream to Home Assistant as a Generic Camera over RTSP, and the panel's
