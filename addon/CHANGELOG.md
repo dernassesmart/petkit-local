@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.24 — 2026-10-11
+
+### Schedule editor: weekdays can be toggled again, and typing a time no longer fights the editor
+
+Carries upstream PR #31 (shinn-y). A feeder schedule's weekday bar wrote its
+toggles to a key the firmware never reads, so a click changed nothing
+visible and nothing saved; it writes `re` now. And the editor repainted the
+whole card under a half-typed time field, swallowing the second digit of the
+hour; it waits for the field to be left.
+
 ## 2.1.23 — 2026-10-10
 
 ### The sound list no longer crashes the feeder
