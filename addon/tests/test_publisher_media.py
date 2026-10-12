@@ -116,3 +116,30 @@ async def test_publish_media_ready_skips_snapshot_for_video_only_category():
 
         topics = [t for t, _, _ in pub._client.published]
         assert "petkit-local/1/last_snapshot" not in topics
+
+
+async def test_an_eating_snapshot_is_also_kept_under_its_own_name():
+    with tempfile.TemporaryDirectory() as tmp:
+        reg, dev, pub = _setup(tmp)
+        img_path = Path(tmp) / "Snapshots" / "photo.jpg"
+        img_path.parent.mkdir(parents=True, exist_ok=True)
+        img_path.write_bytes(b"\xff\xd8eating")
+
+        await pub.publish_media_ready(dev, {
+            "status": "ready", "media_path": str(img_path), "category": "eventImage",
+            "event_name": "eat_start",
+        })
+        topics = [t for t, _, _ in pub._client.published]
+        assert topics.count("petkit-local/1/last_snapshot") == 1
+        assert topics.count("petkit-local/1/last_eating_snapshot") == 1
+        assert next(p for t, p, _ in pub._client.published
+                    if t == "petkit-local/1/last_eating_snapshot") == b"\xff\xd8eating"
+
+        pub._client.published.clear()
+        await pub.publish_media_ready(dev, {
+            "status": "ready", "media_path": str(img_path), "category": "eventImage",
+            "event_name": "pet_detect",
+        })
+        topics = [t for t, _, _ in pub._client.published]
+        assert "petkit-local/1/last_snapshot" in topics
+        assert "petkit-local/1/last_eating_snapshot" not in topics

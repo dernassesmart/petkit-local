@@ -240,6 +240,11 @@ async def api_save_schedule(request: web.Request) -> web.Response:
         d.config["feed_schedule"] = feed
         reg.save()
         _push_feed_get(d, hub, bridge, feed)
+        ha_publisher = request.app.get("ha_publisher")
+        if ha_publisher is not None:
+            # The Feeding Plan sensor reads the stored plan; without this it
+            # would show the old one until the device's next state report.
+            await ha_publisher.publish_state(d)
         now = time.time()
         latest = _build_latest(feed, now)
         wire_groups = []

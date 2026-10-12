@@ -28,7 +28,7 @@ from petkit_local.ha.entities.buttons import (
     FOUNTAIN_BUTTONS, FOUNTAIN_W7H_BUTTONS,
     LITTER_BUTTONS, LITTER_CAMERA_BUTTONS, LITTER_T6_BUTTONS,
 )
-from petkit_local.ha.entities.camera import CAMERA_ENTITIES
+from petkit_local.ha.entities.camera import CAMERA_ENTITIES, FEEDER_CAMERA_IMAGES
 from petkit_local.ha.entities.events import (
     FEEDER_EVENTS, FOUNTAIN_W7H_EVENTS, LITTER_EVENTS,
 )
@@ -42,7 +42,8 @@ from petkit_local.ha.entities.selects import (
 )
 from petkit_local.ha.entities.sensors import (
     FEEDER_BINARY_SENSORS, FEEDER_DUAL_HOPPER_SENSORS, FEEDER_NEXT_GEN_HALL_SENSORS,
-    FEEDER_NEXT_GEN_SENSORS, FEEDER_SINGLE_HOPPER_SENSORS, FEEDER_SENSORS,
+    FEEDER_NEXT_GEN_SENSORS, FEEDER_PLAN_SENSORS, FEEDER_SINGLE_HOPPER_SENSORS,
+    FEEDER_SENSORS,
     FOUNTAIN_BINARY_SENSORS, FOUNTAIN_SENSORS,
     FOUNTAIN_W7H_BINARY_SENSORS, FOUNTAIN_W7H_HALL_SENSORS, FOUNTAIN_W7H_SENSORS,
     LITTER_BINARY_SENSORS, LITTER_CAMERA_HALL_SENSORS, LITTER_CAMERA_SENSORS,
@@ -212,9 +213,10 @@ CATEGORY_SPECS: dict[str, CategorySpec] = {
             *FEEDER_SELECTS,
             *FEEDER_EVENTS,
             *FEEDER_SCHEDULE_TEXT,
+            *FEEDER_PLAN_SENSORS,
         ),
         camera_entities=(*FEEDER_CAMERA_SWITCHES, *FEEDER_CAMERA_NUMBERS,
-                         *FEEDER_CAMERA_BUTTONS,
+                         *FEEDER_CAMERA_BUTTONS, *FEEDER_CAMERA_IMAGES,
                          *_COMMON_CAMERA_ENTITIES),
         state_topics=(
             "feed_start", "feed_stop", "feed_over",

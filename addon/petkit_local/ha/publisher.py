@@ -26,6 +26,7 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from petkit_local.ha.feed_plan import feed_plan_view
 from petkit_local.devices import defaults
 from petkit_local.devices.base import Device
 from petkit_local.devices.registry import DeviceRegistry
@@ -64,6 +65,11 @@ def device_is_stale(device: Device, now: float, timeout: int) -> bool:
     if last_seen <= 0:
         return False
     return (now - last_seen) > timeout
+
+
+#: Event names (`events/normalize.py::event_name_for`) whose still is also
+#: kept as the Last Eating Snapshot.
+EATING_EVENTS = frozenset({"eat_start", "eat_over"})
 
 
 class HAPublisher:
@@ -369,6 +375,12 @@ class HAPublisher:
             else:
                 topic = f"petkit-local/{device.petkit_id}/last_snapshot"
                 await self._emit(topic, data, retain=True)
+                if media.get("event_name") in EATING_EVENTS:
+                    # The same still once more under its own name: "the cat as
+                    # it was last seen eating" is what a dashboard pins, and
+                    # Last Snapshot moves on with every appearance.
+                    await self._emit(f"petkit-local/{device.petkit_id}/last_eating_snapshot",
+                                     data, retain=True)
 
         # ...and the clip roles are the playable videos. `cloudDouble` is
         # excluded on purpose: it's a low-res duplicate of fullVideo, so it
@@ -550,6 +562,9 @@ class HAPublisher:
             "settings": settings,
             "schedule": json.dumps(device.config.get("schedule", [])),
             "feed_schedule": json.dumps(device.config.get("feed_schedule", {})),
+            # The same plan as a sensor with attributes (`ha/feed_plan.py`):
+            # the text entity above reads `unknown` past 255 characters.
+            "feed_plan": feed_plan_view(device.config.get("feed_schedule")),
             "capabilities": {ct: (ct in enabled) for ct in Device.CAPABILITY_TYPES},
             "local": {**LOCAL_DEFAULTS, **(device.config.get("local") or {})},
         }

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from petkit_local.events import ingest
+from petkit_local.events.normalize import event_name_for
 from petkit_local.media import crypto, layout, transcode
 from petkit_local.utils.jsonio import read_bytes
 
@@ -274,11 +275,10 @@ async def process_file_info(device: Device, info: dict, config: dict, store: Eve
             pet_name = pet.get("name")
 
     flags = {k: info.get(k) for k in ("petEvent", "toiletEvent", "cleanEvent", "cvrEvent")}
+    paired = await store.event_by_related(row["related_event"]) if row.get("related_event") else None
     event_kind = None
-    if not any(flags.values()) and row.get("related_event"):
-        paired = await store.event_by_related(row["related_event"])
-        if paired:
-            event_kind = paired.get("event_kind")
+    if not any(flags.values()) and paired:
+        event_kind = paired.get("event_kind")
     label = layout.media_filename_label(flags, event_kind)
     index = await _gallery_index(store, row)
 
@@ -324,6 +324,11 @@ async def process_file_info(device: Device, info: dict, config: dict, store: Eve
 
     if ha_publisher is not None:
         media = await store.get_media_by_file_id(row["file_id"])
+        if media is not None and paired:
+            # The event this file belongs to, by its MQTT-style name
+            # (`eat_start`, ...): the publisher keeps a separate "last eating"
+            # snapshot, and the row itself carries only the device's code.
+            media["event_name"] = event_name_for(paired.get("event_type"), device.device_type)
         await ha_publisher.publish_media_ready(device, media)
 
     return friendly

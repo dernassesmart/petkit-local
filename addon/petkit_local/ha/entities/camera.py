@@ -45,3 +45,11 @@ CAMERA_ENTITIES = [
         entity_category="diagnostic",
     ),
 ]
+
+#: Feeders with a camera: the still from the latest eating event, kept apart
+#: from `last_snapshot` (which the next appearance overwrites). Filled by
+#: `HAPublisher.publish_media_ready` for the events in `EATING_EVENTS`.
+FEEDER_CAMERA_IMAGES = [
+    EntityDef(component="image", key="last_eating_snapshot", name="Last Eating Snapshot",
+              icon="mdi:cat"),
+]

@@ -60,12 +60,15 @@ EXPECTED_ENTITY_COUNTS = {
     # their two times, volume, voice language, and the same two power buttons.
     # t6 +6 on 2026-08-12: the bagging mechanism it reports in every
     # property post and nothing here read. No other litter box has it.
+    # 2026-10-12: every feeder +1, the Feeding Plan sensor (the raw-JSON text
+    # entity reads `unknown` past 255 characters); the camera feeders +1 more,
+    # the Last Eating Snapshot image.
     "t3": 46, "t4": 46, "t5": 82, "t6": 89, "t7": 82,
-    "feeder": 25, "feedermini": 25, "d3": 25, "d4": 25, "d4s": 25,
+    "feeder": 26, "feedermini": 26, "d3": 26, "d4": 26, "d4s": 26,
     # 2026-08-12: replaced `enable_feed_video` button with individual switches
     # (feed_picture, eat_video, voice_prompt, voice_disturb_mode, disturb_mode)
     # and added selected_sound number + play_sound button. Net +6.
-    "d4h": 57, "d4sh": 61,
+    "d4h": 59, "d4sh": 63,
     "w4": 24, "w5": 24, "ctw2": 24, "ctw3": 24, "w7h": 84,
     "k2": 12, "k3": 12,
 }

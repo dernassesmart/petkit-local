@@ -212,3 +212,24 @@ def test_litter_weight_is_published_in_the_unit_the_device_reports():
     # between the two is the tell that one of them is wrong.
     _, pet = next((e, p) for e, p in _build_all(d) if e.key == "pet_weight")
     assert pet["unit_of_measurement"] == p["unit_of_measurement"]
+
+
+def test_feeding_plan_sensor_carries_the_plan_as_attributes():
+    d = Device(device_type="d4sh", petkit_id=1, serial_number="SN")
+    p = next(p for e, p in _build_all(d) if e.key == "feeding_plan")
+    assert p["json_attributes_topic"] == "petkit-local/1/state"
+    assert p["json_attributes_template"] == "{{ value_json.get('feed_plan', {}) | tojson }}"
+    assert "feed_plan" in p["value_template"]
+    # Nothing else grows attributes by accident.
+    others = [p for e, p in _build_all(d) if e.key != "feeding_plan"]
+    assert not any("json_attributes_topic" in p for p in others)
+
+
+def test_a_feeder_with_a_camera_has_an_eating_snapshot_image():
+    d = Device(device_type="d4sh", petkit_id=1, serial_number="SN")
+    topics = [p["image_topic"] for e, p in _build_all(d) if e.component == "image"]
+    assert "petkit-local/1/last_eating_snapshot" in topics
+    assert "petkit-local/1/last_snapshot" in topics
+    t5 = Device(device_type="t5", petkit_id=2, serial_number="SN")
+    assert "petkit-local/2/last_eating_snapshot" not in [
+        p["image_topic"] for e, p in _build_all(t5) if e.component == "image"]

@@ -91,6 +91,11 @@ class EntityDef:
     step: float = 1
     payload_on: str = "ON"
     payload_off: str = "OFF"
+    #: For a `sensor`: top-level key of the state document whose dict HA takes
+    #: as the entity's attributes (`json_attributes_template`). A sensor state
+    #: is capped at 255 characters like a text entity's, attributes are not —
+    #: which is how a whole feeding plan reaches a dashboard (`ha/feed_plan.py`).
+    attributes_path: str = ""
 
     @property
     def unique_id_suffix(self) -> str:
@@ -194,6 +199,12 @@ def build_discovery_payload(
         payload["icon"] = entity.icon
     if entity.entity_category:
         payload["entity_category"] = entity.entity_category
+    if entity.attributes_path and entity.component == "sensor":
+        # Attributes ride on the same state document as the value: HA renders
+        # the template against each publish and takes the resulting dict.
+        payload["json_attributes_topic"] = state_topic
+        payload["json_attributes_template"] = (
+            "{{ value_json.get('" + entity.attributes_path + "', {}) | tojson }}")
 
     cmd = command_topic or command_topic_for(device_id, entity)
 

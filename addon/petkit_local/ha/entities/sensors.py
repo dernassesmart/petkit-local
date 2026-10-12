@@ -224,6 +224,15 @@ FEEDER_SENSORS = [
               value_path="state.lastFeed", device_class="timestamp", icon="mdi:food-fork-drink"),
 ]
 
+#: The schedule as a sensor, for dashboards: the raw-JSON `text` entity caps
+#: at 255 characters and reads `unknown` for any real plan. The state is the
+#: next meal; the whole plan sits in the attributes (`ha/feed_plan.py`).
+FEEDER_PLAN_SENSORS = [
+    EntityDef(component="sensor", key="feeding_plan", name="Feeding Plan",
+              value_path="feed_plan.next", attributes_path="feed_plan",
+              icon="mdi:calendar-clock"),
+]
+
 FEEDER_BINARY_SENSORS = [
     EntityDef(component="binary_sensor", key="food_low", name="Food Low",
               value_path="state.food", device_class="problem", icon="mdi:food-drumstick-off"),

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.29 — 2026-10-12
+
+### A feeding-plan sensor for dashboards, and a "last eating" snapshot
+
+- **Feeding Plan** sensor (`sensor.…_feeding_plan`): its state is the next
+  meal ("Mon 18:00 · 2× hopper 1"), its attributes carry the whole plan
+  (`meals`, one per time with PetKit weekday numbers, names and portions per
+  hopper; `schedule` as stored). The raw-JSON `text` entity stays, but Home
+  Assistant caps a text state at 255 characters, so any real plan read
+  `unknown` there. The sensor updates the moment a plan is saved in the panel.
+- **Last Eating Snapshot** image (`image.…_last_eating_snapshot`) on feeders
+  with a camera: the still from the latest eating event, kept apart from
+  Last Snapshot, which moves on with every appearance.
+
 ## 2.1.28 — 2026-10-12
 
 ### A meal moved to another time kept its old id and never fired
