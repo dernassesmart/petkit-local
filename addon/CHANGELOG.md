@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.30 — 2026-10-12
+
+### Two feeder events the add-on did not know: eating done, face recognised
+
+A YumShare Dual-Hopper 2 (fw 895) reports the end of an eating episode as
+HTTP event type 6 and its face-recognition verdict as type 24. Both logged
+"Unknown event_type" and read "Event 6" / "Event 24" on the timeline; the
+missing type 6 is also why the new Last Eating Snapshot stayed empty. They
+are now `eat_over` ("Eating done", with the eating still) and `pet_discern`
+("Detection result").
+
 ## 2.1.29 — 2026-10-12
 
 ### A feeding-plan sensor for dashboards, and a "last eating" snapshot

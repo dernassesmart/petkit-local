@@ -430,8 +430,9 @@ UNKNOWN_HTTP_CODES = frozenset({"12", "19", "22", "23"})
 #: are set inside a `pk_event_pack_*` body behind a dispatch that the
 #: disassembly does not resolve to a constant.
 #:
-#: Known pack functions without a recovered code: eat_start, eat_over,
-#: pet_event, err_start, err_over, relay_start, relay_over, relay_response.
+#: Known pack functions without a recovered code: err_start, err_over,
+#: relay_start, relay_over, relay_response. (eat_over and pet_discern were
+#: pinned to 6 and 24 on a live D4SH, fw 895, on 2026-10-12 -- see below.)
 FEEDER_HTTP_CODES: dict[str, EventCode] = {
     "2": EventCode(
         kind=KIND_FEEDING, label="Feeding done", anchor=True, role=ROLE_DONE,
@@ -474,6 +475,19 @@ FEEDER_HTTP_CODES: dict[str, EventCode] = {
              "`drink_start` on a fountain and something else again on a litter "
              "box.",
     ),
+    "6": EventCode(
+        kind=KIND_FEEDING, label="Eating done", anchor=True,
+        role=ROLE_DONE, done_word="eating", grade=INFERRED,
+        firmware="pk_event_pack_eat_over_event_msg",
+        families=FEEDER_CAMERA,
+        note="Seen on a live D4SH (fw 895, HTTP, 2026-10-12): its "
+             "content.related_event is the id of the code 5 (`eat_start`) "
+             "that opened the episode, it arrives when the cat leaves the "
+             "bowl, and it carries the eating preview image. The same pair "
+             "(5 starts, 6 ends) is the fountain's drink_start/drink_over. "
+             "Without this row it read 'Event 6' and the Last Eating "
+             "Snapshot never filled.",
+    ),
     "7": EventCode(
         kind=KIND_MOTION, label="Motion detected", anchor=True,
         families=FEEDER_CAMERA,
@@ -500,6 +514,18 @@ FEEDER_HTTP_CODES: dict[str, EventCode] = {
              "in the binary, so the number-to-name link is the owner's, not "
              "the RE's. Code 8 is `err_over`-adjacent on other categories — "
              "these numbers are per-category.",
+    ),
+    "24": EventCode(
+        kind=KIND_PET, label="Detection result", detail=True,
+        role=ROLE_DETECTION,
+        firmware="pk_event_pack_pet_discern_msg (0x18)",
+        families=FEEDER_CAMERA,
+        note="Seen on a live D4SH (fw 895, HTTP, 2026-10-12), the feeder's "
+             "face-recognition verdict: content {related_event, count, area, "
+             "pet_id, tracker_info, vomit_info}, the same shape and the same "
+             "0x18 as the litter box's code 24. The pet registry already "
+             "resolved it to a named pet; this row only stops it reading "
+             "'Event 24'.",
     ),
 }
 
@@ -688,7 +714,8 @@ MQTT_EVENT_TOPICS: dict[str, EventCode] = {
     # would have classified as "other" on the model that actually sends them.
     "pet_discern": EventCode(
         kind=KIND_PET, label="Detection result", detail=True,
-        role=ROLE_DETECTION, families=LITTER_NEXT_GEN | FOUNTAIN_NEXT_GEN),
+        role=ROLE_DETECTION,
+        families=LITTER_NEXT_GEN | FOUNTAIN_NEXT_GEN | FEEDER_CAMERA),
     "pet_wander": EventCode(
         kind=KIND_PET, label="Pet nearby", grade=UNVERIFIED, anchor=True,
         families=LITTER_T6_PLUS),

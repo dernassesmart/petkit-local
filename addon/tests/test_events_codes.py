@@ -313,3 +313,18 @@ def test_litter_ble_relay_codes_are_system_detail():
 def test_feed_result_9_is_mapped():
     """Observed on a live D4SH with empty hoppers."""
     assert 9 in codes.FEED_RESULT
+
+
+def test_the_feeders_eating_and_recognition_codes_are_named():
+    """Codes 6 and 24 on a D4SH (fw 895, 2026-10-12): the end of an eating
+    episode and the face-recognition verdict. Both read "Event N" before, and
+    the eating one is what fills the Last Eating Snapshot."""
+    from petkit_local.events.normalize import event_name_for
+    assert event_name_for("6", "d4sh") == "eat_over"
+    assert event_name_for("5", "d4sh") == "eat_start"
+    assert event_name_for("24", "d4sh") == "pet_discern"
+    assert ingest.event_type_label("6", "d4sh") == "Eating done"
+    assert ingest.classify_event_kind("24", device_type="d4sh") == codes.KIND_PET
+    # Still per category: 6 is drinking on a fountain and something else on
+    # a litter box.
+    assert event_name_for("6", "w7h") != "eat_over"
