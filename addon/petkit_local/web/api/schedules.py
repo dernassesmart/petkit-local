@@ -136,7 +136,7 @@ def _clean_feed_schedule(value: Any) -> dict[str, Any] | None:
     `events/codes.py::FEED_SCHEDULE_ITEM_KEYS`. Unlike every other schedule
     here, a meal's `t` counts SECONDS since local midnight — the cloud's
     `n_46560` fires at 12:56:00 (D4SH capture, 2026-08-12) — and the id is the
-    cloud's `n_<seconds>` scheme, regenerated whenever a client sends an int.
+    cloud's `n_<seconds>` scheme, regenerated from `t` on every save.
 
     `itemJsonString` is rebuilt from `it` rather than trusted: the real cloud
     sends both, they are the same list twice, and two copies of one value in one
@@ -177,11 +177,14 @@ def _clean_feed_schedule(value: Any) -> dict[str, Any] | None:
                 return None
             if not (0 <= first <= 255 and 0 <= second <= 255):
                 return None
-            raw_id = meal.get("id")
-            if not isinstance(raw_id, str) or not raw_id:
-                raw_id = f"n_{second_of_day}"
-            meals.append(
-                {"id": raw_id, "t": second_of_day, "a1": first, "a2": second})
+            # The id IS the time in the cloud's scheme, so it is rebuilt from
+            # `t` on every save rather than kept. The editor used to keep the
+            # id a meal was created with, so moving a meal from 08:00 to
+            # 07:15 left it as `n_28800` next to the other group's genuine
+            # `n_28800`; the firmware hands the MCU a 7-byte id per meal and
+            # the moved meal never fired (2026-10-12).
+            meals.append({"id": f"n_{second_of_day}", "t": second_of_day,
+                          "a1": first, "a2": second})
 
         groups.append({
             "re": ",".join(str(d) for d in sorted(set(days))),

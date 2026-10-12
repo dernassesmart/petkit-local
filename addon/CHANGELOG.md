@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.28 — 2026-10-12
+
+### A meal moved to another time kept its old id and never fired
+
+The schedule editor kept the id a meal was created with. The cloud's scheme
+makes the id the meal's time (`n_28800` is 08:00), and the feeder keys its
+meals by that id, so a meal moved from 08:00 to 07:15 sat next to the other
+group's real `n_28800` and was dropped. Ids are now rebuilt from the time on
+every save.
+
 ## 2.1.27 — 2026-10-12
 
 ### Scheduled meals ran two hours late: the device took UTC from our state-report answer
