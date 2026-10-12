@@ -27,16 +27,29 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 DATE_FORMAT = "%Y-%m-%d"
 
 
-def cloud_timestamp(when: float | None = None) -> str:
-    """A UTC instant in the format PetKit's cloud puts on the wire.
+def cloud_timestamp(when: float | None = None, offset_hours: float = 0.0) -> str:
+    """An instant in the format PetKit's cloud puts on the wire, rendered in
+    the zone `offset_hours` east of UTC.
 
-    `2026-07-15T05:19:42.000+0000` — milliseconds, and a `+0000` offset with no
-    colon. NOT `datetime.isoformat()`, which produces `+00:00` and would be a
-    different string to whatever parses it on the device. Confirmed against
-    captured `dev_state_report` and `dev_schedule_get` replies.
+    `2026-07-15T07:19:42.000+0200` — milliseconds, and a `+HHMM` offset with no
+    colon. NOT `datetime.isoformat()`, which produces `+02:00` and would be a
+    different string to whatever parses it on the device. The shape was
+    confirmed against captured `dev_state_report` and `dev_schedule_get`
+    replies (which carried `+0000`).
+
+    The offset is not decoration. A YumShare Dual-Hopper 2 (D4SH, firmware
+    895) takes its timezone FROM this string: `parse_recv_from_topic` hands
+    the `time` of every `dev_state_report` answer to a parser that reads the
+    sign and the `HHMM` behind it into a static, and `get_ctime_timezone`
+    then writes that over `user_info.timezone` after every report. Answered
+    with `+0000`, the device fell back to UTC within a minute of any
+    `property.set{timezone}` push and fired its scheduled meals two hours
+    late. The wall-clock part has to be the local time of that same zone:
+    the firmware compares the parsed instant with its own clock and re-sets
+    the clock when the two differ by more than four seconds.
     """
-    now = datetime.fromtimestamp(when, timezone.utc) if when is not None \
-        else datetime.now(timezone.utc)
+    tz = timezone(timedelta(hours=float(offset_hours or 0.0)))
+    now = datetime.fromtimestamp(when, tz) if when is not None else datetime.now(tz)
     return (now.strftime("%Y-%m-%dT%H:%M:%S.")
             + f"{now.microsecond // 1000:03d}"
             + now.strftime("%z"))

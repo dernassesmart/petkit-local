@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.27 — 2026-10-12
+
+### Scheduled meals ran two hours late: the device took UTC from our state-report answer
+
+The `time` on every `dev_state_report` answer now carries the device's own
+zone (`2026-10-12T09:05:00.000+0200`) instead of `+0000`. A YumShare
+Dual-Hopper 2 on firmware 895 reads its timezone out of exactly that offset
+after every report, so the UTC answer put the device back on timezone 0
+within a minute of any push from the Timezone box, and meals scheduled for
+19:00 and 07:15 came at 21:00 and 09:15. With the offset in the answer the
+device follows the add-on's zone on its own, daylight-saving changes
+included; nothing needs pushing any more.
+
 ## 2.1.26 — 2026-10-11
 
 ### Telnet provisioning: verified on the device, log tidied

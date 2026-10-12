@@ -76,7 +76,8 @@ async def handle_state_report(request: web.Request) -> web.Response:
     its report is parsed only far enough to mirror onto the panel.
 
     Returns:
-        ``{"result": {"interval": 30, "time": "<ISO-8601 with milliseconds>"}}``.
+        ``{"result": {"interval": 30, "time": "<ISO-8601 with milliseconds>"}}``,
+        the time in the device's own zone (`+0200`, not `+0000`).
         `interval` is how many seconds the device waits before reporting again,
         so it is the knob that sets state freshness for every HA sensor.
     """
@@ -154,6 +155,8 @@ async def handle_state_report(request: web.Request) -> web.Response:
             # visible regression. Events carry a state snapshot of their own,
             # so the cloud can afford to be quiet and we cannot.
             "interval": 30,
-            "time": cloud_timestamp(),
+            # In the DEVICE's zone, not UTC: a D4SH reads its timezone out of
+            # this string's offset after every report (see `cloud_timestamp`).
+            "time": cloud_timestamp(offset_hours=device.timezone_offset if device else 0.0),
         }
     })
